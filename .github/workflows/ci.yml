@@ -40,7 +40,7 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.pub-cache
@@ -69,7 +69,7 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.pub-cache
@@ -107,7 +107,7 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.pub-cache
@@ -116,7 +116,7 @@ jobs:
           restore-keys: pub-${{ runner.os }}-
 
       - name: Cache CocoaPods
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ios/Pods
           key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
@@ -143,7 +143,7 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.pub-cache
