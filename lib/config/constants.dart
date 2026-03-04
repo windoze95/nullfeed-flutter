@@ -21,6 +21,7 @@ class AppConstants {
   static const String channels = '$apiBase/channels';
   static const String channelSubscribe = '$apiBase/channels/subscribe';
   static const String videos = '$apiBase/videos';
+  static const String activeDownloads = '$apiBase/videos/downloads';
   static const String feedContinueWatching = '$apiBase/feed/continue-watching';
   static const String feedNewEpisodes = '$apiBase/feed/new-episodes';
   static const String feedRecentlyAdded = '$apiBase/feed/recently-added';
@@ -35,6 +36,8 @@ class AppConstants {
   static String videoDetail(String id) => '$apiBase/videos/$id';
   static String videoStream(String id) => '$apiBase/videos/$id/stream';
   static String videoProgress(String id) => '$apiBase/videos/$id/progress';
+  static String videoDownload(String id) => '$apiBase/videos/$id/download';
+  static String videoCancel(String id) => '$apiBase/videos/$id/cancel';
   static String discoverDismiss(String id) => '$apiBase/discover/$id/dismiss';
   static String websocket(String userId) => '/ws/$userId';
 
@@ -49,4 +52,6 @@ class AppConstants {
   static const double videoCardWidth = 320.0;
   static const double contentRowHeight = 200.0;
   static const double tvContentRowHeight = 300.0;
+  static const double tvVideoCardWidth = 400.0;
+  static const double tvChannelCardWidth = 360.0;
 }

@@ -46,14 +46,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (userId != null) {
       try {
         state = state.copyWith(isLoading: true);
+        // Re-select profile to get a fresh session token
+        final result = await _api.selectProfile(userId);
+        await _storage.setSessionToken(result.token);
         final profiles = await _api.getProfiles();
-        final user = profiles.firstWhere(
-          (p) => p.id == userId,
-          orElse: () => throw Exception('Profile not found'),
-        );
-        state = AuthState(profiles: profiles, currentUser: user);
+        state = AuthState(profiles: profiles, currentUser: result.user);
       } catch (_) {
         await _storage.setSelectedUserId(null);
+        await _storage.setSessionToken(null);
         state = const AuthState();
       }
     }
@@ -75,9 +75,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> selectProfile(String userId, {String? pin}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final user = await _api.selectProfile(userId, pin: pin);
-      await _storage.setSelectedUserId(user.id);
-      state = state.copyWith(currentUser: user, isLoading: false);
+      final result = await _api.selectProfile(userId, pin: pin);
+      await _storage.setSelectedUserId(result.user.id);
+      await _storage.setSessionToken(result.token);
+      state = state.copyWith(currentUser: result.user, isLoading: false);
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -98,10 +99,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         avatarUrl: avatarUrl,
         pin: pin,
       );
-      await _storage.setSelectedUserId(user.id);
+      // After creating, select the profile to get a session token
+      final result = await _api.selectProfile(user.id, pin: pin);
+      await _storage.setSelectedUserId(result.user.id);
+      await _storage.setSessionToken(result.token);
       state = state.copyWith(
-        profiles: [...state.profiles, user],
-        currentUser: user,
+        profiles: [...state.profiles, result.user],
+        currentUser: result.user,
         isLoading: false,
       );
     } catch (e) {
@@ -113,6 +117,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    await _storage.setSessionToken(null);
     await _storage.clearSession();
     state = state.copyWith(clearUser: true);
   }

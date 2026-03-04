@@ -26,9 +26,9 @@ class ChannelsNotifier extends StateNotifier<AsyncValue<List<Channel>>> {
     }
   }
 
-  Future<void> subscribe(String youtubeUrl) async {
+  Future<void> subscribe(String youtubeUrl, {String trackingMode = 'FUTURE_ONLY'}) async {
     try {
-      await _api.subscribeToChannel(youtubeUrl);
+      await _api.subscribeToChannel(youtubeUrl, trackingMode: trackingMode);
       await load();
     } catch (e, st) {
       state = AsyncValue.error(e, st);

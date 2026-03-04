@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../config/theme.dart';
 
 /// A wrapper widget that provides tvOS focus engine integration.
@@ -64,9 +65,9 @@ class _FocusWrapperState extends State<FocusWrapper>
       autofocus: widget.autofocus,
       onFocusChange: _onFocusChange,
       onKeyEvent: (node, event) {
-        // Handle select/enter key on tvOS
         if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.select) {
+            (event.logicalKey == LogicalKeyboardKey.select ||
+             event.logicalKey == LogicalKeyboardKey.enter)) {
           widget.onSelect?.call();
           return KeyEventResult.handled;
         }

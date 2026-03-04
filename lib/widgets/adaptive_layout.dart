@@ -35,9 +35,10 @@ class AdaptiveLayout extends StatelessWidget {
   static bool isPhone(BuildContext context) =>
       getDeviceType(context) == DeviceType.phone;
 
+  /// Content padding — extra on TV for overscan safety
   static double contentPadding(BuildContext context) {
     return switch (getDeviceType(context)) {
-      DeviceType.tv => 48.0,
+      DeviceType.tv => 60.0,
       DeviceType.tablet => 24.0,
       DeviceType.phone => 16.0,
     };
@@ -48,6 +49,20 @@ class AdaptiveLayout extends StatelessWidget {
       DeviceType.tv => 5,
       DeviceType.tablet => 3,
       DeviceType.phone => 2,
+    };
+  }
+
+  /// Adaptive value helper — pick per device type
+  static T value<T>(
+    BuildContext context, {
+    required T phone,
+    T? tablet,
+    required T tv,
+  }) {
+    return switch (getDeviceType(context)) {
+      DeviceType.tv => tv,
+      DeviceType.tablet => tablet ?? phone,
+      DeviceType.phone => phone,
     };
   }
 

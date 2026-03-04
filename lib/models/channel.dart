@@ -14,6 +14,7 @@ class Channel with _$Channel {
     @JsonKey(name: 'banner_url') String? bannerUrl,
     @JsonKey(name: 'avatar_url') String? avatarUrl,
     @JsonKey(name: 'last_checked_at') DateTime? lastCheckedAt,
+    @JsonKey(name: 'tracking_mode') String? trackingMode,
   }) = _Channel;
 
   factory Channel.fromJson(Map<String, dynamic> json) =>

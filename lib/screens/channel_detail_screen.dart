@@ -1,28 +1,95 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../models/video.dart';
 import '../providers/channel_provider.dart';
+import '../providers/download_progress_provider.dart';
+import '../services/api_service.dart';
 import '../widgets/video_list_tile.dart';
+import '../widgets/adaptive_layout.dart';
 import '../config/theme.dart';
 
-class ChannelDetailScreen extends ConsumerWidget {
+class ChannelDetailScreen extends ConsumerStatefulWidget {
   final String channelId;
   const ChannelDetailScreen({super.key, required this.channelId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final channelAsync = ref.watch(channelDetailProvider(channelId));
-    final videosAsync = ref.watch(channelVideosProvider(channelId));
+  ConsumerState<ChannelDetailScreen> createState() =>
+      _ChannelDetailScreenState();
+}
+
+class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
+  Timer? _pollTimer;
+  final Set<String> _pendingVideoIds = {};
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPolling() {
+    if (_pollTimer?.isActive ?? false) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      ref.invalidate(channelVideosProvider(widget.channelId));
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  void _checkPollingNeeded(List<Video> videos) {
+    for (final id in _pendingVideoIds.toList()) {
+      final video = videos.where((v) => v.id == id).firstOrNull;
+      if (video != null && video.status != VideoStatus.cataloged) {
+        _pendingVideoIds.remove(id);
+      }
+    }
+
+    final hasInProgress =
+        videos.any((v) => v.isInProgress) || _pendingVideoIds.isNotEmpty;
+    if (hasInProgress) {
+      _startPolling();
+    } else {
+      _stopPolling();
+    }
+  }
+
+  List<Video> _applyOptimisticUpdates(List<Video> videos) {
+    if (_pendingVideoIds.isEmpty) return videos;
+    return videos.map((v) {
+      if (_pendingVideoIds.contains(v.id) &&
+          v.status == VideoStatus.cataloged) {
+        return v.copyWith(status: VideoStatus.pending);
+      }
+      return v;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final channelAsync = ref.watch(channelDetailProvider(widget.channelId));
+    final videosAsync = ref.watch(channelVideosProvider(widget.channelId));
+    final progressMap = ref.watch(downloadProgressProvider);
+    final isTv = AdaptiveLayout.isTv(context);
+    final padding = AdaptiveLayout.contentPadding(context);
+
+    videosAsync.whenData(_checkPollingNeeded);
 
     return Scaffold(
       body: channelAsync.when(
         data: (channel) => CustomScrollView(
           slivers: [
             SliverAppBar(
-              expandedHeight: 220,
+              expandedHeight: isTv ? 280 : 220,
               pinned: true,
               backgroundColor: NullFeedTheme.surfaceColor,
+              leading: isTv ? const SizedBox.shrink() : null,
               flexibleSpace: FlexibleSpaceBar(
                 background: Stack(
                   fit: StackFit.expand,
@@ -44,7 +111,8 @@ class ChannelDetailScreen extends ConsumerWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            NullFeedTheme.backgroundColor.withValues(alpha: 0.9),
+                            NullFeedTheme.backgroundColor
+                                .withValues(alpha: 0.9),
                           ],
                         ),
                       ),
@@ -55,7 +123,7 @@ class ChannelDetailScreen extends ConsumerWidget {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(padding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -63,21 +131,21 @@ class ChannelDetailScreen extends ConsumerWidget {
                       children: [
                         if (channel.avatarUrl != null)
                           CircleAvatar(
-                            radius: 32,
+                            radius: isTv ? 40 : 32,
                             backgroundImage:
                                 CachedNetworkImageProvider(channel.avatarUrl!),
                           )
                         else
                           CircleAvatar(
-                            radius: 32,
-                            backgroundColor:
-                                NullFeedTheme.primaryColor.withValues(alpha: 0.2),
+                            radius: isTv ? 40 : 32,
+                            backgroundColor: NullFeedTheme.primaryColor
+                                .withValues(alpha: 0.2),
                             child: Text(
                               channel.name.isNotEmpty
                                   ? channel.name[0].toUpperCase()
                                   : '?',
-                              style: const TextStyle(
-                                fontSize: 28,
+                              style: TextStyle(
+                                fontSize: isTv ? 34 : 28,
                                 fontWeight: FontWeight.bold,
                                 color: NullFeedTheme.primaryColor,
                               ),
@@ -99,7 +167,8 @@ class ChannelDetailScreen extends ConsumerWidget {
                                   channel.description!,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  style:
+                                      Theme.of(context).textTheme.bodyMedium,
                                 ),
                             ],
                           ),
@@ -107,27 +176,29 @@ class ChannelDetailScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // Resume / Play Next button
                     videosAsync.when(
                       data: (videos) {
-                        if (videos.isEmpty) {
+                        final completeVideos = videos
+                            .where((v) => v.status == VideoStatus.complete)
+                            .toList();
+                        if (completeVideos.isEmpty) {
                           return const SizedBox.shrink();
                         }
-                        final firstUnwatched = videos.where((v) => !v.isWatched);
+                        final firstUnwatched =
+                            completeVideos.where((v) => !v.isWatched);
                         final resumeVideo = firstUnwatched.isNotEmpty
                             ? firstUnwatched.first
-                            : videos.first;
+                            : completeVideos.first;
                         final hasProgress =
                             resumeVideo.watchPositionSeconds > 0;
                         return SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: () =>
-                                context.push('/player/${resumeVideo.id}'),
-                            icon: Icon(
-                              hasProgress ? Icons.play_arrow : Icons.play_arrow,
-                              size: 24,
-                            ),
+                            onPressed: () async {
+                              await context.push('/player/${resumeVideo.id}');
+                              ref.invalidate(channelVideosProvider(widget.channelId));
+                            },
+                            icon: const Icon(Icons.play_arrow, size: 24),
                             label: Text(
                               hasProgress ? 'Resume' : 'Play Next',
                             ),
@@ -149,13 +220,14 @@ class ChannelDetailScreen extends ConsumerWidget {
             ),
             videosAsync.when(
               data: (videos) {
-                if (videos.isEmpty) {
+                final displayVideos = _applyOptimisticUpdates(videos);
+                if (displayVideos.isEmpty) {
                   return SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.all(32),
+                      padding: EdgeInsets.all(padding),
                       child: Center(
                         child: Text(
-                          'No videos downloaded yet',
+                          'No videos found',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ),
@@ -165,13 +237,25 @@ class ChannelDetailScreen extends ConsumerWidget {
                 return SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final video = videos[index];
+                      final video = displayVideos[index];
                       return VideoListTile(
                         video: video,
-                        onTap: () => context.push('/player/${video.id}'),
+                        downloadProgress: progressMap[video.id],
+                        onTap: video.isPlayable
+                            ? () async {
+                                await context.push('/player/${video.id}');
+                                ref.invalidate(channelVideosProvider(widget.channelId));
+                              }
+                            : null,
+                        onDownload: video.isDownloadable
+                            ? () => _onDownload(video)
+                            : null,
+                        onCancel: video.isInProgress
+                            ? () => _onCancelDownload(video)
+                            : null,
                       );
                     },
-                    childCount: videos.length,
+                    childCount: displayVideos.length,
                   ),
                 );
               },
@@ -212,5 +296,41 @@ class ChannelDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _onCancelDownload(Video video) async {
+    final api = ref.read(apiServiceProvider);
+    try {
+      await api.cancelDownload(video.id);
+      ref.invalidate(channelVideosProvider(widget.channelId));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to cancel download: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _onDownload(Video video) async {
+    final api = ref.read(apiServiceProvider);
+
+    setState(() {
+      _pendingVideoIds.add(video.id);
+    });
+
+    try {
+      await api.downloadVideo(video.id);
+      _startPolling();
+    } catch (e) {
+      setState(() {
+        _pendingVideoIds.remove(video.id);
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start download: $e')),
+        );
+      }
+    }
   }
 }

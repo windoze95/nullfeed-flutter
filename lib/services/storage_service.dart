@@ -29,6 +29,17 @@ class StorageService {
     }
   }
 
+  // Session Token
+  String? getSessionToken() => _session.get('session_token') as String?;
+
+  Future<void> setSessionToken(String? token) async {
+    if (token == null) {
+      await _session.delete('session_token');
+    } else {
+      await _session.put('session_token', token);
+    }
+  }
+
   // Quality preference
   String getPreferredQuality() =>
       _settings.get(AppConstants.preferredQualityKey, defaultValue: '1080p')

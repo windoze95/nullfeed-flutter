@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
 import '../config/theme.dart';
+import '../widgets/adaptive_layout.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -19,7 +20,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
-    _serverUrlController = TextEditingController(text: settings.serverUrl ?? '');
+    _serverUrlController =
+        TextEditingController(text: settings.serverUrl ?? '');
     _checkServer();
   }
 
@@ -41,168 +43,183 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final authState = ref.watch(authStateProvider);
+    final isTv = AdaptiveLayout.isTv(context);
+    final padding = AdaptiveLayout.contentPadding(context);
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            floating: true,
-            title: const Text('Settings'),
-            backgroundColor: NullFeedTheme.backgroundColor,
-          ),
+          if (!isTv)
+            SliverAppBar(
+              floating: true,
+              title: const Text('Settings'),
+              backgroundColor: NullFeedTheme.backgroundColor,
+            )
+          else
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Profile section
-                  _SectionHeader(title: 'Profile'),
-                  Card(
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor:
-                            NullFeedTheme.primaryColor.withValues(alpha: 0.2),
-                        child: Text(
-                          authState.currentUser?.displayName.isNotEmpty == true
-                              ? authState.currentUser!.displayName[0]
-                                  .toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: NullFeedTheme.primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        authState.currentUser?.displayName ?? 'Unknown',
-                      ),
-                      subtitle: Text(
-                        authState.currentUser?.isAdmin == true
-                            ? 'Administrator'
-                            : 'User',
-                      ),
-                      trailing: OutlinedButton(
-                        onPressed: () =>
-                            ref.read(authStateProvider.notifier).signOut(),
-                        child: const Text('Switch Profile'),
-                      ),
-                    ),
+              padding: EdgeInsets.all(padding),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: isTv ? 800 : double.infinity,
                   ),
-                  const SizedBox(height: 24),
-
-                  // Server section
-                  _SectionHeader(title: 'Server Connection'),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: _serverUrlController,
-                            decoration: InputDecoration(
-                              labelText: 'Server URL',
-                              hintText: 'http://192.168.1.100:8484',
-                              suffixIcon: Icon(
-                                settings.isServerReachable
-                                    ? Icons.check_circle
-                                    : Icons.error,
-                                color: settings.isServerReachable
-                                    ? NullFeedTheme.successColor
-                                    : NullFeedTheme.errorColor,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Profile section
+                      _SectionHeader(title: 'Profile'),
+                      Card(
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: NullFeedTheme.primaryColor
+                                .withValues(alpha: 0.2),
+                            child: Text(
+                              authState.currentUser?.displayName.isNotEmpty ==
+                                      true
+                                  ? authState.currentUser!.displayName[0]
+                                      .toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: NullFeedTheme.primaryColor,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
+                          title: Text(
+                            authState.currentUser?.displayName ?? 'Unknown',
+                          ),
+                          subtitle: Text(
+                            authState.currentUser?.isAdmin == true
+                                ? 'Administrator'
+                                : 'User',
+                          ),
+                          trailing: OutlinedButton(
+                            onPressed: () => ref
+                                .read(authStateProvider.notifier)
+                                .signOut(),
+                            child: const Text('Switch Profile'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Server section
+                      _SectionHeader(title: 'Server Connection'),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              OutlinedButton(
-                                onPressed: _checkServer,
-                                child: const Text('Test Connection'),
+                              TextField(
+                                controller: _serverUrlController,
+                                decoration: InputDecoration(
+                                  labelText: 'Server URL',
+                                  hintText: 'http://192.168.1.100:8484',
+                                  suffixIcon: Icon(
+                                    settings.isServerReachable
+                                        ? Icons.check_circle
+                                        : Icons.error,
+                                    color: settings.isServerReachable
+                                        ? NullFeedTheme.successColor
+                                        : NullFeedTheme.errorColor,
+                                  ),
+                                ),
                               ),
-                              const SizedBox(width: 12),
-                              ElevatedButton(
-                                onPressed: () {
-                                  final url =
-                                      _serverUrlController.text.trim();
-                                  if (url.isNotEmpty) {
-                                    ref
-                                        .read(settingsProvider.notifier)
-                                        .setServerUrl(url);
-                                    _checkServer();
-                                  }
-                                },
-                                child: const Text('Save'),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _checkServer,
+                                    child: const Text('Test Connection'),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      final url =
+                                          _serverUrlController.text.trim();
+                                      if (url.isNotEmpty) {
+                                        ref
+                                            .read(settingsProvider.notifier)
+                                            .setServerUrl(url);
+                                        _checkServer();
+                                      }
+                                    },
+                                    child: const Text('Save'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                settings.isServerReachable
+                                    ? 'Connected'
+                                    : 'Unable to reach server',
+                                style: TextStyle(
+                                  color: settings.isServerReachable
+                                      ? NullFeedTheme.successColor
+                                      : NullFeedTheme.errorColor,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            settings.isServerReachable
-                                ? 'Connected'
-                                : 'Unable to reach server',
-                            style: TextStyle(
-                              color: settings.isServerReachable
-                                  ? NullFeedTheme.successColor
-                                  : NullFeedTheme.errorColor,
-                              fontSize: 12,
-                            ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Quality section
+                      _SectionHeader(title: 'Download Quality'),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            children: qualityOptions
+                                .map(
+                                  (quality) => RadioListTile<String>(
+                                    title: Text(quality),
+                                    value: quality,
+                                    groupValue: settings.preferredQuality,
+                                    activeColor: NullFeedTheme.primaryColor,
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        ref
+                                            .read(settingsProvider.notifier)
+                                            .setPreferredQuality(value);
+                                      }
+                                    },
+                                  ),
+                                )
+                                .toList(),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Quality section
-                  _SectionHeader(title: 'Download Quality'),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        children: qualityOptions
-                            .map(
-                              (quality) => RadioListTile<String>(
-                                title: Text(quality),
-                                value: quality,
-                                groupValue: settings.preferredQuality,
-                                activeColor: NullFeedTheme.primaryColor,
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    ref
-                                        .read(settingsProvider.notifier)
-                                        .setPreferredQuality(value);
-                                  }
-                                },
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // About section
-                  _SectionHeader(title: 'About'),
-                  Card(
-                    child: Column(
-                      children: [
-                        const ListTile(
-                          leading: Icon(Icons.info_outline),
-                          title: Text('NullFeed'),
-                          subtitle: Text('Version 1.0.0'),
                         ),
-                        ListTile(
-                          leading: const Icon(Icons.code),
-                          title: const Text('Server URL'),
-                          subtitle: Text(settings.serverUrl ?? 'Not configured'),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // About section
+                      _SectionHeader(title: 'About'),
+                      Card(
+                        child: Column(
+                          children: [
+                            const ListTile(
+                              leading: Icon(Icons.info_outline),
+                              title: Text('NullFeed'),
+                              subtitle: Text('Version 1.0.0'),
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.code),
+                              title: const Text('Server URL'),
+                              subtitle: Text(
+                                  settings.serverUrl ?? 'Not configured'),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 48),
+                    ],
                   ),
-                  const SizedBox(height: 48),
-                ],
+                ),
               ),
             ),
           ),

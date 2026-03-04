@@ -28,9 +28,9 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          final userId = storage.getSelectedUserId();
-          if (userId != null) {
-            options.headers['X-User-Id'] = userId;
+          final token = storage.getSessionToken();
+          if (token != null) {
+            options.headers['X-User-Token'] = token;
           }
           handler.next(options);
         },
@@ -51,12 +51,15 @@ class ApiService {
         .toList();
   }
 
-  Future<User> selectProfile(String userId, {String? pin}) async {
+  Future<({User user, String token})> selectProfile(String userId, {String? pin}) async {
     final response = await _dio.post(
       '$_baseUrl${AppConstants.authSelect}',
       data: {'user_id': userId, if (pin != null) 'pin': pin},
     );
-    return User.fromJson(response.data as Map<String, dynamic>);
+    final data = response.data as Map<String, dynamic>;
+    final user = User.fromJson(data['user'] as Map<String, dynamic>);
+    final token = data['token'] as String;
+    return (user: user, token: token);
   }
 
   Future<User> createProfile({
@@ -92,21 +95,33 @@ class ApiService {
   Future<List<Video>> getChannelVideos(String channelId) async {
     final response =
         await _dio.get('$_baseUrl${AppConstants.channelVideos(channelId)}');
-    return (response.data as List)
+    final data = response.data;
+    // Backend returns paginated response {items: [...], total, page, per_page}
+    final List items = data is Map ? (data['items'] as List? ?? []) : (data as List);
+    return items
         .map((json) => Video.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 
-  Future<void> subscribeToChannel(String youtubeUrl) async {
+  Future<void> subscribeToChannel(String youtubeUrl, {String trackingMode = 'FUTURE_ONLY'}) async {
     await _dio.post(
       '$_baseUrl${AppConstants.channelSubscribe}',
-      data: {'url': youtubeUrl},
+      data: {'url': youtubeUrl, 'tracking_mode': trackingMode},
     );
   }
 
   Future<void> unsubscribeFromChannel(String channelId) async {
     await _dio
         .delete('$_baseUrl${AppConstants.channelUnsubscribe(channelId)}');
+  }
+
+  // Downloads
+  Future<List<Video>> getActiveDownloads() async {
+    final response =
+        await _dio.get('$_baseUrl${AppConstants.activeDownloads}');
+    return (response.data as List)
+        .map((json) => Video.fromJson(json as Map<String, dynamic>))
+        .toList();
   }
 
   // Videos
@@ -116,8 +131,11 @@ class ApiService {
     return Video.fromJson(response.data as Map<String, dynamic>);
   }
 
-  String getVideoStreamUrl(String id) =>
-      '$_baseUrl${AppConstants.videoStream(id)}';
+  String getVideoStreamUrl(String id) {
+    final token = storage.getSessionToken();
+    final base = '$_baseUrl${AppConstants.videoStream(id)}';
+    return token != null ? '$base?token=$token' : base;
+  }
 
   Future<void> updateProgress(String videoId, int positionSeconds) async {
     await _dio.put(
@@ -128,6 +146,14 @@ class ApiService {
 
   Future<void> deleteVideo(String videoId) async {
     await _dio.delete('$_baseUrl${AppConstants.videoDetail(videoId)}');
+  }
+
+  Future<void> downloadVideo(String videoId) async {
+    await _dio.post('$_baseUrl${AppConstants.videoDownload(videoId)}');
+  }
+
+  Future<void> cancelDownload(String videoId) async {
+    await _dio.post('$_baseUrl${AppConstants.videoCancel(videoId)}');
   }
 
   // Feed

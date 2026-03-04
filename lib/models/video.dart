@@ -4,6 +4,8 @@ part 'video.freezed.dart';
 part 'video.g.dart';
 
 enum VideoStatus {
+  @JsonValue('CATALOGED')
+  cataloged,
   @JsonValue('PENDING')
   pending,
   @JsonValue('DOWNLOADING')
@@ -25,17 +27,27 @@ class Video with _$Video {
     @JsonKey(name: 'uploaded_at') DateTime? uploadedAt,
     @JsonKey(name: 'file_path') String? filePath,
     @JsonKey(name: 'file_size_bytes') int? fileSizeBytes,
-    @Default(VideoStatus.pending) VideoStatus status,
+    @Default(VideoStatus.cataloged) VideoStatus status,
     @JsonKey(name: 'metadata_json') Map<String, dynamic>? metadataJson,
     // Joined fields from UserVideoRef
     @JsonKey(name: 'watch_position_seconds') @Default(0) int watchPositionSeconds,
     @JsonKey(name: 'is_watched') @Default(false) bool isWatched,
+    // Joined from channel
+    @JsonKey(name: 'channel_name') @Default('') String channelName,
   }) = _Video;
 
   factory Video.fromJson(Map<String, dynamic> json) => _$VideoFromJson(json);
 }
 
 extension VideoExtensions on Video {
+  bool get isPlayable => status == VideoStatus.complete;
+
+  bool get isDownloadable =>
+      status == VideoStatus.cataloged || status == VideoStatus.failed;
+
+  bool get isInProgress =>
+      status == VideoStatus.pending || status == VideoStatus.downloading;
+
   double get watchProgress {
     if (durationSeconds == 0) return 0;
     return watchPositionSeconds / durationSeconds;

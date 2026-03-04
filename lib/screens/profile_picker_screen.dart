@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../config/theme.dart';
+import '../widgets/adaptive_layout.dart';
 
 class ProfilePickerScreen extends ConsumerStatefulWidget {
   const ProfilePickerScreen({super.key});
@@ -84,18 +86,19 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
+    final isTv = AdaptiveLayout.isTv(context);
 
     if (_showServerSetup) {
       return Scaffold(
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(48),
+            padding: EdgeInsets.all(isTv ? 80 : 48),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.rss_feed,
-                  size: 72,
+                  size: isTv ? 96 : 72,
                   color: NullFeedTheme.primaryColor,
                 ),
                 const SizedBox(height: 24),
@@ -110,7 +113,7 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
                 ),
                 const SizedBox(height: 32),
                 SizedBox(
-                  width: 400,
+                  width: isTv ? 500 : 400,
                   child: TextField(
                     controller: _serverUrlController,
                     decoration: const InputDecoration(
@@ -138,9 +141,9 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.rss_feed,
-                size: 56,
+                size: isTv ? 80 : 56,
                 color: NullFeedTheme.primaryColor,
               ),
               const SizedBox(height: 16),
@@ -167,8 +170,8 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
                 )
               else
                 Wrap(
-                  spacing: 24,
-                  runSpacing: 24,
+                  spacing: isTv ? 36 : 24,
+                  runSpacing: isTv ? 36 : 24,
                   alignment: WrapAlignment.center,
                   children: [
                     ...authState.profiles.map(
@@ -220,68 +223,97 @@ class _ProfileCard extends StatefulWidget {
 
 class _ProfileCardState extends State<_ProfileCard> {
   bool _isHovered = false;
+  bool _isFocused = false;
+
+  bool get _isHighlighted => _isHovered || _isFocused;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          transform:
-              _isHovered ? (Matrix4.identity()..scale(1.05)) : Matrix4.identity(),
-          transformAlignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: widget.isAdd
-                      ? NullFeedTheme.cardColor
-                      : NullFeedTheme.primaryColor.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _isHovered
-                        ? NullFeedTheme.primaryColor
-                        : Colors.transparent,
-                    width: 3,
+    final isTv = AdaptiveLayout.isTv(context);
+    final cardSize = isTv ? 160.0 : 120.0;
+
+    return Focus(
+      onFocusChange: (f) => setState(() => _isFocused = f),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            transform: _isHighlighted
+                ? (Matrix4.identity()..scale(1.05))
+                : Matrix4.identity(),
+            transformAlignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: cardSize,
+                  height: cardSize,
+                  decoration: BoxDecoration(
+                    color: widget.isAdd
+                        ? NullFeedTheme.cardColor
+                        : NullFeedTheme.primaryColor.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _isHighlighted
+                          ? NullFeedTheme.primaryColor
+                          : Colors.transparent,
+                      width: 3,
+                    ),
+                    boxShadow: _isFocused
+                        ? [
+                            BoxShadow(
+                              color: NullFeedTheme.primaryColor
+                                  .withValues(alpha: 0.3),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
                   ),
-                ),
-                child: widget.isAdd
-                    ? const Icon(
-                        Icons.add,
-                        size: 48,
-                        color: NullFeedTheme.textMuted,
-                      )
-                    : Center(
-                        child: Text(
-                          widget.name.isNotEmpty
-                              ? widget.name[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: NullFeedTheme.primaryColor,
+                  child: widget.isAdd
+                      ? Icon(
+                          Icons.add,
+                          size: isTv ? 64 : 48,
+                          color: NullFeedTheme.textMuted,
+                        )
+                      : Center(
+                          child: Text(
+                            widget.name.isNotEmpty
+                                ? widget.name[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              fontSize: isTv ? 64 : 48,
+                              fontWeight: FontWeight.bold,
+                              color: NullFeedTheme.primaryColor,
+                            ),
                           ),
                         ),
-                      ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.name,
-                style: TextStyle(
-                  color: _isHovered
-                      ? NullFeedTheme.textPrimary
-                      : NullFeedTheme.textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                Text(
+                  widget.name,
+                  style: TextStyle(
+                    color: _isHighlighted
+                        ? NullFeedTheme.textPrimary
+                        : NullFeedTheme.textSecondary,
+                    fontSize: isTv ? 18 : 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

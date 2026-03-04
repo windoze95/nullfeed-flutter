@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../config/theme.dart';
 import '../config/constants.dart';
+import 'adaptive_layout.dart';
 
 class ContentRow extends StatelessWidget {
   final String title;
@@ -17,25 +18,32 @@ class ContentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTv = AdaptiveLayout.isTv(context);
+    final padding = AdaptiveLayout.contentPadding(context);
+    final rowHeight = isTv
+        ? AppConstants.tvContentRowHeight
+        : AppConstants.contentRowHeight;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+          padding: EdgeInsets.fromLTRB(padding, 24, padding, 12),
           child: Text(
             title,
             style: Theme.of(context).textTheme.titleLarge,
           ),
         ),
         SizedBox(
-          height: AppConstants.contentRowHeight,
+          height: rowHeight,
           child: isLoading
-              ? _buildShimmer()
+              ? _buildShimmer(padding)
               : ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: padding),
                   itemCount: children.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, __) =>
+                      SizedBox(width: isTv ? 20 : 12),
                   itemBuilder: (_, index) => children[index],
                 ),
         ),
@@ -43,13 +51,13 @@ class ContentRow extends StatelessWidget {
     );
   }
 
-  Widget _buildShimmer() {
+  Widget _buildShimmer(double padding) {
     return Shimmer.fromColors(
       baseColor: NullFeedTheme.cardColor,
       highlightColor: NullFeedTheme.cardHoverColor,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.symmetric(horizontal: padding),
         itemCount: 4,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, __) => Container(

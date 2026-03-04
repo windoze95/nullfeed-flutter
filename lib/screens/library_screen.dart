@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/channel_provider.dart';
 import '../widgets/channel_card.dart';
+import '../widgets/adaptive_layout.dart';
 import '../config/theme.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -51,21 +52,36 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final channels = ref.watch(channelsProvider);
+    final isTv = AdaptiveLayout.isTv(context);
+    final padding = AdaptiveLayout.contentPadding(context);
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            floating: true,
-            title: const Text('Library'),
-            backgroundColor: NullFeedTheme.backgroundColor,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: _showSubscribeDialog,
+          if (!isTv)
+            SliverAppBar(
+              floating: true,
+              title: const Text('Library'),
+              backgroundColor: NullFeedTheme.backgroundColor,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: _showSubscribeDialog,
+                ),
+              ],
+            )
+          else
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _TVAddButton(onSelect: _showSubscribeDialog),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
           channels.when(
             data: (channelList) {
               if (channelList.isEmpty) {
@@ -86,7 +102,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Tap + to subscribe to a YouTube channel',
+                          isTv
+                              ? 'Select "Add Channel" to subscribe'
+                              : 'Tap + to subscribe to a YouTube channel',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
@@ -95,13 +113,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 );
               }
               return SliverPadding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(padding),
                 sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 400,
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: isTv ? 500 : 400,
                     childAspectRatio: 16 / 10,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+                    crossAxisSpacing: isTv ? 20 : 12,
+                    mainAxisSpacing: isTv ? 20 : 12,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -141,6 +159,68 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TV add channel button
+// ---------------------------------------------------------------------------
+
+class _TVAddButton extends StatefulWidget {
+  final VoidCallback onSelect;
+  const _TVAddButton({required this.onSelect});
+
+  @override
+  State<_TVAddButton> createState() => _TVAddButtonState();
+}
+
+class _TVAddButtonState extends State<_TVAddButton> {
+  bool _isFocused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (f) => setState(() => _isFocused = f),
+      child: GestureDetector(
+        onTap: widget.onSelect,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: _isFocused
+                ? NullFeedTheme.primaryColor.withValues(alpha: 0.2)
+                : NullFeedTheme.cardColor,
+            border: Border.all(
+              color: _isFocused
+                  ? NullFeedTheme.primaryColor
+                  : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add,
+                  color: _isFocused
+                      ? NullFeedTheme.primaryColor
+                      : NullFeedTheme.textSecondary,
+                  size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Add Channel',
+                style: TextStyle(
+                  color: _isFocused
+                      ? NullFeedTheme.primaryColor
+                      : NullFeedTheme.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

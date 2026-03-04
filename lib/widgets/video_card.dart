@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/video.dart';
 import '../models/channel.dart';
 import '../config/theme.dart';
 import '../config/constants.dart';
+import 'adaptive_layout.dart';
 import 'progress_bar.dart';
 
 class VideoCard extends StatefulWidget {
@@ -25,6 +27,9 @@ class VideoCard extends StatefulWidget {
 
 class _VideoCardState extends State<VideoCard> {
   bool _isHovered = false;
+  bool _isFocused = false;
+
+  bool get _isHighlighted => _isHovered || _isFocused;
 
   String? get _thumbnailUrl {
     if (widget.video.youtubeVideoId.isNotEmpty) {
@@ -33,43 +38,93 @@ class _VideoCardState extends State<VideoCard> {
     return null;
   }
 
+  void _onActivate() {
+    if (widget.showProgress) {
+      context.push('/player/${widget.video.id}');
+    } else if (widget.channel != null) {
+      context.push('/channel/${widget.channel!.id}');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () {
-          if (widget.showProgress) {
-            context.push('/player/${widget.video.id}');
-          } else if (widget.channel != null) {
-            context.push('/channel/${widget.channel!.id}');
-          }
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: AppConstants.videoCardWidth,
-          transform: _isHovered
-              ? (Matrix4.identity()..scale(1.05))
-              : Matrix4.identity(),
-          transformAlignment: Alignment.center,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Thumbnail
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: AspectRatio(
-                  aspectRatio: AppConstants.cardAspectRatio,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (_thumbnailUrl != null)
-                        CachedNetworkImage(
-                          imageUrl: _thumbnailUrl!,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
+    final isTv = AdaptiveLayout.isTv(context);
+    final cardWidth = isTv
+        ? AppConstants.tvVideoCardWidth
+        : AppConstants.videoCardWidth;
+
+    return Focus(
+      onFocusChange: (focused) => setState(() => _isFocused = focused),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter)) {
+          _onActivate();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: _onActivate,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: cardWidth,
+            transform: _isHighlighted
+                ? (Matrix4.identity()..scale(1.05))
+                : Matrix4.identity(),
+            transformAlignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: _isFocused
+                  ? Border.all(
+                      color: NullFeedTheme.primaryColor,
+                      width: 3,
+                    )
+                  : null,
+              boxShadow: _isFocused
+                  ? [
+                      BoxShadow(
+                        color:
+                            NullFeedTheme.primaryColor.withValues(alpha: 0.3),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Thumbnail
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: AspectRatio(
+                    aspectRatio: AppConstants.cardAspectRatio,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (_thumbnailUrl != null)
+                          CachedNetworkImage(
+                            imageUrl: _thumbnailUrl!,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) => Container(
+                              color: NullFeedTheme.cardColor,
+                              child: const Icon(
+                                Icons.play_circle_outline,
+                                color: NullFeedTheme.textMuted,
+                                size: 40,
+                              ),
+                            ),
+                            placeholder: (_, __) => Container(
+                              color: NullFeedTheme.cardColor,
+                            ),
+                          )
+                        else
+                          Container(
                             color: NullFeedTheme.cardColor,
                             child: const Icon(
                               Icons.play_circle_outline,
@@ -77,102 +132,90 @@ class _VideoCardState extends State<VideoCard> {
                               size: 40,
                             ),
                           ),
-                          placeholder: (_, __) => Container(
-                            color: NullFeedTheme.cardColor,
-                          ),
-                        )
-                      else
-                        Container(
-                          color: NullFeedTheme.cardColor,
-                          child: const Icon(
-                            Icons.play_circle_outline,
-                            color: NullFeedTheme.textMuted,
-                            size: 40,
-                          ),
-                        ),
 
-                      // Duration badge
-                      if (widget.video.durationSeconds > 0)
-                        Positioned(
-                          right: 6,
-                          bottom: 6,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              widget.video.formattedDuration,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
+                        // Duration badge
+                        if (widget.video.durationSeconds > 0)
+                          Positioned(
+                            right: 6,
+                            bottom: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                widget.video.formattedDuration,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ),
-                        ),
 
-                      // Play icon overlay on hover
-                      if (_isHovered)
-                        Container(
-                          color: Colors.black38,
-                          child: const Center(
-                            child: Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 48,
+                        // Play icon overlay on highlight
+                        if (_isHighlighted)
+                          Container(
+                            color: Colors.black38,
+                            child: const Center(
+                              child: Icon(
+                                Icons.play_arrow,
+                                color: Colors.white,
+                                size: 48,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Progress bar
-              if (widget.showProgress && widget.video.watchProgress > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: NullFeedProgressBar(
-                    progress: widget.video.watchProgress,
-                    height: 3,
-                  ),
-                ),
-
-              // Title & channel
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  widget.video.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _isHovered
-                        ? NullFeedTheme.textPrimary
-                        : NullFeedTheme.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (widget.channel != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    widget.channel!.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: NullFeedTheme.textMuted,
-                      fontSize: 12,
+                      ],
                     ),
                   ),
                 ),
-            ],
+
+                // Progress bar
+                if (widget.showProgress && widget.video.watchProgress > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: NullFeedProgressBar(
+                      progress: widget.video.watchProgress,
+                      height: 3,
+                    ),
+                  ),
+
+                // Title & channel
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    widget.video.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _isHighlighted
+                          ? NullFeedTheme.textPrimary
+                          : NullFeedTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (widget.channel != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      widget.channel!.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: NullFeedTheme.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
