@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../models/video.dart';
 import '../config/theme.dart';
+import '../providers/offline_provider.dart';
+import '../services/offline_service.dart';
 import 'progress_bar.dart';
 
-class VideoListTile extends StatefulWidget {
+class VideoListTile extends ConsumerStatefulWidget {
   final Video video;
   final VoidCallback? onTap;
   final VoidCallback? onDownload;
@@ -23,10 +26,10 @@ class VideoListTile extends StatefulWidget {
   });
 
   @override
-  State<VideoListTile> createState() => _VideoListTileState();
+  ConsumerState<VideoListTile> createState() => _VideoListTileState();
 }
 
-class _VideoListTileState extends State<VideoListTile> {
+class _VideoListTileState extends ConsumerState<VideoListTile> {
   bool _isFocused = false;
 
   String? get _thumbnailUrl {
@@ -37,11 +40,65 @@ class _VideoListTileState extends State<VideoListTile> {
   }
 
   Widget _buildTrailingWidget() {
+    final offlineStatus = ref.watch(offlineStatusProvider(widget.video.id));
+    final offlineProgress = ref.watch(offlineProgressProvider);
+
     switch (widget.video.status) {
       case VideoStatus.complete:
-        return const Icon(
-          Icons.play_circle_outline,
-          color: NullFeedTheme.textMuted,
+        if (offlineStatus == 'complete') {
+          return const Icon(
+            Icons.offline_pin,
+            color: NullFeedTheme.successColor,
+          );
+        }
+        if (offlineStatus == 'downloading') {
+          final progress = offlineProgress[widget.video.id];
+          return SizedBox(
+            width: 36,
+            height: 36,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: progress,
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    ref.read(offlineServiceProvider).cancelDownload(widget.video.id);
+                    ref.read(offlineVideosProvider.notifier).refresh();
+                  },
+                  borderRadius: BorderRadius.circular(18),
+                  child: const Icon(
+                    Icons.stop_rounded,
+                    size: 14,
+                    color: NullFeedTheme.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return IconButton(
+          icon: const Icon(
+            Icons.cloud_download,
+            color: NullFeedTheme.textMuted,
+          ),
+          onPressed: () async {
+            final offlineService = ref.read(offlineServiceProvider);
+            await offlineService.downloadToDevice(
+              widget.video.id,
+              channelId: widget.video.channelId,
+              title: widget.video.title,
+              youtubeVideoId: widget.video.youtubeVideoId,
+            );
+            ref.read(offlineVideosProvider.notifier).refresh();
+          },
+          tooltip: 'Save offline',
         );
       case VideoStatus.downloading:
       case VideoStatus.pending:
@@ -97,7 +154,7 @@ class _VideoListTileState extends State<VideoListTile> {
 
   @override
   Widget build(BuildContext context) {
-    final isDownloaded = widget.video.isPlayable;
+    final isTappable = widget.onTap != null;
 
     return Focus(
       onFocusChange: (focused) => setState(() => _isFocused = focused),
@@ -105,7 +162,7 @@ class _VideoListTileState extends State<VideoListTile> {
         if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.select ||
                 event.logicalKey == LogicalKeyboardKey.enter)) {
-          if (isDownloaded) {
+          if (isTappable) {
             widget.onTap?.call();
           }
           return KeyEventResult.handled;
@@ -113,7 +170,7 @@ class _VideoListTileState extends State<VideoListTile> {
         return KeyEventResult.ignored;
       },
       child: Opacity(
-        opacity: isDownloaded ? 1.0 : 0.7,
+        opacity: isTappable || widget.video.isPlayable ? 1.0 : 0.7,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
@@ -126,7 +183,7 @@ class _VideoListTileState extends State<VideoListTile> {
                 : null,
           ),
           child: InkWell(
-            onTap: isDownloaded ? widget.onTap : null,
+            onTap: isTappable ? widget.onTap : null,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
               padding:

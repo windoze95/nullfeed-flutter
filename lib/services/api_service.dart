@@ -156,6 +156,16 @@ class ApiService {
     await _dio.post('$_baseUrl${AppConstants.videoCancel(videoId)}');
   }
 
+  Future<void> requestPreview(String videoId) async {
+    await _dio.post('$_baseUrl${AppConstants.videoPreview(videoId)}');
+  }
+
+  String getPreviewStreamUrl(String id) {
+    final token = storage.getSessionToken();
+    final base = '$_baseUrl${AppConstants.videoPreviewStream(id)}';
+    return token != null ? '$base?token=$token' : base;
+  }
+
   // Feed
   Future<List<FeedItem>> getContinueWatching() async {
     final response =

@@ -8,6 +8,7 @@ import '../models/video.dart';
 import '../providers/channel_provider.dart';
 import '../providers/download_progress_provider.dart';
 import '../services/api_service.dart';
+import '../services/storage_service.dart';
 import '../widgets/video_list_tile.dart';
 import '../widgets/adaptive_layout.dart';
 import '../config/theme.dart';
@@ -208,6 +209,31 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                       loading: () => const SizedBox.shrink(),
                       error: (_, __) => const SizedBox.shrink(),
                     ),
+                    if (channel.trackingMode == 'FUTURE_ONLY')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Auto-offline new episodes',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                            Switch(
+                              value: ref
+                                  .read(storageServiceProvider)
+                                  .isAutoOfflineEnabled(widget.channelId),
+                              onChanged: (value) {
+                                ref
+                                    .read(storageServiceProvider)
+                                    .setAutoOffline(widget.channelId, value);
+                                setState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     const SizedBox(height: 24),
                     Text(
                       'Videos',
@@ -241,7 +267,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                       return VideoListTile(
                         video: video,
                         downloadProgress: progressMap[video.id],
-                        onTap: video.isPlayable
+                        onTap: (video.isPlayable || video.isInProgress)
                             ? () async {
                                 await context.push('/player/${video.id}');
                                 ref.invalidate(channelVideosProvider(widget.channelId));

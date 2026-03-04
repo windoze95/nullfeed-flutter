@@ -7,11 +7,13 @@ class AppConstants {
   // Hive box names
   static const String settingsBox = 'settings';
   static const String sessionBox = 'session';
+  static const String offlineBox = 'offline_videos';
 
   // Hive keys
   static const String serverUrlKey = 'server_url';
   static const String selectedUserIdKey = 'selected_user_id';
   static const String preferredQualityKey = 'preferred_quality';
+  static const String autoOfflineChannelsKey = 'auto_offline_channels';
 
   // API paths
   static const String apiBase = '/api';
@@ -38,6 +40,9 @@ class AppConstants {
   static String videoProgress(String id) => '$apiBase/videos/$id/progress';
   static String videoDownload(String id) => '$apiBase/videos/$id/download';
   static String videoCancel(String id) => '$apiBase/videos/$id/cancel';
+  static String videoPreview(String id) => '$apiBase/videos/$id/preview';
+  static String videoPreviewStream(String id) =>
+      '$apiBase/videos/$id/preview-stream';
   static String discoverDismiss(String id) => '$apiBase/discover/$id/dismiss';
   static String websocket(String userId) => '/ws/$userId';
 

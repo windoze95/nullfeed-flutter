@@ -54,6 +54,26 @@ class StorageService {
     await _session.clear();
   }
 
+  // Auto-offline channel preferences
+  Set<String> getAutoOfflineChannels() {
+    final list = _settings.get(AppConstants.autoOfflineChannelsKey, defaultValue: <String>[]);
+    return Set<String>.from(list as List);
+  }
+
+  void setAutoOffline(String channelId, bool enabled) {
+    final channels = getAutoOfflineChannels();
+    if (enabled) {
+      channels.add(channelId);
+    } else {
+      channels.remove(channelId);
+    }
+    _settings.put(AppConstants.autoOfflineChannelsKey, channels.toList());
+  }
+
+  bool isAutoOfflineEnabled(String channelId) {
+    return getAutoOfflineChannels().contains(channelId);
+  }
+
   // Clear all data
   Future<void> clearAll() async {
     await _settings.clear();

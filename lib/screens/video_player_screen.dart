@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import '../models/video.dart';
 import '../providers/video_provider.dart';
+import '../providers/websocket_provider.dart';
 import '../services/api_service.dart';
+import '../services/offline_service.dart';
+import '../services/websocket_service.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
 import '../widgets/adaptive_layout.dart';
@@ -21,12 +25,15 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
 
 class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   VideoPlayerController? _controller;
+  VideoPlayerController? _hqController;
   Timer? _progressTimer;
   Timer? _hideControlsTimer;
   bool _showControls = true;
   bool _isInitialized = false;
+  bool _isPreviewMode = false;
   String? _error;
   late final ApiService _api;
+  StreamSubscription<WebSocketEvent>? _wsSubscription;
 
   @override
   void initState() {
@@ -50,47 +57,189 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   Future<void> _initPlayer() async {
     try {
-      final video = await _api.getVideo(widget.videoId);
-      if (video.status != VideoStatus.complete) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Video is not downloaded yet')),
+      // Path 0: Offline — play from local file
+      final offlineService = ref.read(offlineServiceProvider);
+      if (offlineService.isAvailableOffline(widget.videoId)) {
+        final localPath = offlineService.getLocalPath(widget.videoId);
+        if (localPath != null) {
+          final controller = VideoPlayerController.file(File(localPath));
+          await controller.initialize();
+
+          // Resume from saved position if available
+          final video = await _api.getVideo(widget.videoId);
+          if (video.watchPositionSeconds > 0) {
+            final resumePos = (video.watchPositionSeconds - 10).clamp(0, video.durationSeconds);
+            await controller.seekTo(Duration(seconds: resumePos));
+          }
+
+          await controller.play();
+
+          if (!mounted) {
+            controller.dispose();
+            return;
+          }
+
+          setState(() {
+            _controller = controller;
+            _isInitialized = true;
+          });
+
+          _progressTimer?.cancel();
+          _progressTimer = Timer.periodic(
+            const Duration(seconds: AppConstants.progressSaveIntervalSeconds),
+            (_) => _saveProgress(),
           );
-          Navigator.of(context).pop();
+          _scheduleHideControls();
+          return;
         }
+      }
+
+      final video = await _api.getVideo(widget.videoId);
+
+      // Path 1: HQ complete — play directly
+      if (video.status == VideoStatus.complete) {
+        final streamUrl = _api.getVideoStreamUrl(widget.videoId);
+        await _startPlayback(streamUrl, video);
         return;
       }
 
-      final streamUrl = _api.getVideoStreamUrl(widget.videoId);
-      _controller = VideoPlayerController.networkUrl(
-        Uri.parse(streamUrl),
-      );
-
-      await _controller!.initialize();
-
-      // Rewind 10s on resume so user can re-orient
-      if (video.watchPositionSeconds > 0) {
-        final resumePos = (video.watchPositionSeconds - 10).clamp(0, video.durationSeconds);
-        await _controller!.seekTo(
-          Duration(seconds: resumePos),
-        );
+      // Path 2: Preview already ready — play preview, listen for HQ
+      if (video.hasPreviewReady) {
+        final previewUrl = _api.getPreviewStreamUrl(widget.videoId);
+        await _startPlayback(previewUrl, video, isPreview: true);
+        _listenForHqReady();
+        return;
       }
+
+      // Path 3: No preview yet — request one, show spinner, listen for it
+      try {
+        await _api.requestPreview(widget.videoId);
+      } catch (_) {
+        // Preview request may fail; continue listening anyway
+      }
+      _listenForPreviewReady(video);
     } catch (e) {
+      if (mounted) {
+        setState(() => _error = 'Failed to load video: $e');
+      }
+    }
+  }
+
+  Future<void> _startPlayback(String url, Video video, {bool isPreview = false}) async {
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+
+    try {
+      await controller.initialize();
+    } catch (e) {
+      controller.dispose();
       if (mounted) {
         setState(() => _error = 'Failed to load video: $e');
       }
       return;
     }
 
-    await _controller!.play();
-    setState(() => _isInitialized = true);
+    // Rewind 10s on resume so user can re-orient
+    if (video.watchPositionSeconds > 0) {
+      final resumePos = (video.watchPositionSeconds - 10).clamp(0, video.durationSeconds);
+      await controller.seekTo(Duration(seconds: resumePos));
+    }
 
+    await controller.play();
+
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+
+    setState(() {
+      _controller = controller;
+      _isInitialized = true;
+      _isPreviewMode = isPreview;
+    });
+
+    _progressTimer?.cancel();
     _progressTimer = Timer.periodic(
       const Duration(seconds: AppConstants.progressSaveIntervalSeconds),
       (_) => _saveProgress(),
     );
 
     _scheduleHideControls();
+  }
+
+  void _listenForPreviewReady(Video video) {
+    _wsSubscription?.cancel();
+    final wsService = ref.read(webSocketServiceProvider);
+
+    // Timeout after 30s if no preview arrives
+    Timer? timeout;
+    timeout = Timer(const Duration(seconds: 30), () {
+      _wsSubscription?.cancel();
+      if (mounted && !_isInitialized) {
+        setState(() => _error = 'Preview download timed out. Try again later.');
+      }
+    });
+
+    _wsSubscription = wsService.events.listen((event) {
+      if (event.type == WebSocketEventType.previewReady &&
+          event.data['video_id'] == widget.videoId) {
+        timeout?.cancel();
+        _wsSubscription?.cancel();
+        final previewUrl = _api.getPreviewStreamUrl(widget.videoId);
+        _startPlayback(previewUrl, video, isPreview: true);
+        _listenForHqReady();
+      } else if (event.type == WebSocketEventType.downloadComplete &&
+          event.data['video_id'] == widget.videoId) {
+        // HQ finished before preview — play HQ directly
+        timeout?.cancel();
+        _wsSubscription?.cancel();
+        final streamUrl = _api.getVideoStreamUrl(widget.videoId);
+        _startPlayback(streamUrl, video);
+      }
+    });
+  }
+
+  void _listenForHqReady() {
+    _wsSubscription?.cancel();
+    final wsService = ref.read(webSocketServiceProvider);
+    _wsSubscription = wsService.events.listen((event) {
+      if (event.type == WebSocketEventType.downloadComplete &&
+          event.data['video_id'] == widget.videoId) {
+        _wsSubscription?.cancel();
+        _switchToHq();
+      }
+    });
+  }
+
+  Future<void> _switchToHq() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    // Capture current position
+    final currentPosition = _controller!.value.position;
+
+    try {
+      final streamUrl = _api.getVideoStreamUrl(widget.videoId);
+      final hqController = VideoPlayerController.networkUrl(Uri.parse(streamUrl));
+      await hqController.initialize();
+      await hqController.seekTo(currentPosition);
+      await hqController.play();
+
+      if (!mounted) {
+        hqController.dispose();
+        return;
+      }
+
+      final oldController = _controller;
+      setState(() {
+        _controller = hqController;
+        _isPreviewMode = false;
+      });
+
+      oldController?.pause();
+      oldController?.dispose();
+    } catch (e) {
+      // HQ switch failed — keep playing preview (silent fallback)
+      debugPrint('HQ switch failed, continuing preview: $e');
+    }
   }
 
   void _saveProgress() {
@@ -186,6 +335,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   @override
   void dispose() {
+    _wsSubscription?.cancel();
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     // Save final position directly (can't use ref after dispose)
@@ -195,6 +345,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
     _controller?.pause();
     _controller?.dispose();
+    _hqController?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
@@ -254,6 +405,33 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                 )
               else
                 const Center(child: CircularProgressIndicator()),
+
+              // 360p preview badge
+              if (_isPreviewMode && _isInitialized)
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: SafeArea(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '360p',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
               // Controls overlay
               if (_showControls && _isInitialized)

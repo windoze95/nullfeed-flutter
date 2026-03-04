@@ -5,6 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 enum WebSocketEventType {
   downloadProgress,
   downloadComplete,
+  previewReady,
   newEpisode,
   recommendationReady,
   unknown,
@@ -22,6 +23,7 @@ class WebSocketEvent {
     final type = switch (typeStr) {
       'download_progress' => WebSocketEventType.downloadProgress,
       'download_complete' => WebSocketEventType.downloadComplete,
+      'preview_ready' => WebSocketEventType.previewReady,
       'new_episode' => WebSocketEventType.newEpisode,
       'recommendation_ready' => WebSocketEventType.recommendationReady,
       _ => WebSocketEventType.unknown,

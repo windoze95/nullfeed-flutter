@@ -32,6 +32,8 @@ class Video with _$Video {
     // Joined fields from UserVideoRef
     @JsonKey(name: 'watch_position_seconds') @Default(0) int watchPositionSeconds,
     @JsonKey(name: 'is_watched') @Default(false) bool isWatched,
+    // Preview
+    @JsonKey(name: 'preview_status') String? previewStatus,
     // Joined from channel
     @JsonKey(name: 'channel_name') @Default('') String channelName,
   }) = _Video;
@@ -40,7 +42,11 @@ class Video with _$Video {
 }
 
 extension VideoExtensions on Video {
-  bool get isPlayable => status == VideoStatus.complete;
+  bool get isPlayable => status == VideoStatus.complete || previewStatus == 'READY';
+
+  bool get hasPreviewReady => previewStatus == 'READY';
+
+  bool get isPreviewOnly => previewStatus == 'READY' && status != VideoStatus.complete;
 
   bool get isDownloadable =>
       status == VideoStatus.cataloged || status == VideoStatus.failed;

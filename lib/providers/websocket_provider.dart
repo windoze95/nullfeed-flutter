@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/websocket_service.dart';
 import '../services/storage_service.dart';
+import '../services/offline_service.dart';
 import 'auth_provider.dart';
 import 'download_progress_provider.dart';
 import 'feed_provider.dart';
 import 'discover_provider.dart';
+import 'offline_provider.dart';
 
 final webSocketServiceProvider = Provider<WebSocketService>((ref) {
   final service = WebSocketService();
@@ -47,6 +49,18 @@ final webSocketConnectionProvider = Provider<void>((ref) {
           ref.invalidate(continueWatchingProvider);
           ref.invalidate(newEpisodesProvider);
           ref.invalidate(recentlyAddedProvider);
+          // Auto-offline: download to device if enabled for this channel
+          final channelId = event.data['channel_id'] as String?;
+          if (channelId != null) {
+            final storageService = ref.read(storageServiceProvider);
+            if (storageService.isAutoOfflineEnabled(channelId)) {
+              final offlineService = ref.read(offlineServiceProvider);
+              final videoId = event.data['video_id'] as String;
+              offlineService.downloadToDevice(videoId, channelId: channelId);
+            }
+          }
+        case WebSocketEventType.previewReady:
+          break; // Player screen listens directly via wsService.events
         case WebSocketEventType.newEpisode:
           ref.invalidate(newEpisodesProvider);
           ref.invalidate(recentlyAddedProvider);

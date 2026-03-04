@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/video.dart';
 import '../models/channel.dart';
 import '../config/theme.dart';
 import '../config/constants.dart';
+import '../providers/offline_provider.dart';
 import 'adaptive_layout.dart';
 import 'progress_bar.dart';
 
-class VideoCard extends StatefulWidget {
+class VideoCard extends ConsumerStatefulWidget {
   final Video video;
   final Channel? channel;
   final bool showProgress;
@@ -22,10 +24,10 @@ class VideoCard extends StatefulWidget {
   });
 
   @override
-  State<VideoCard> createState() => _VideoCardState();
+  ConsumerState<VideoCard> createState() => _VideoCardState();
 }
 
-class _VideoCardState extends State<VideoCard> {
+class _VideoCardState extends ConsumerState<VideoCard> {
   bool _isHovered = false;
   bool _isFocused = false;
 
@@ -158,6 +160,25 @@ class _VideoCardState extends State<VideoCard> {
                             ),
                           ),
 
+                        // Offline badge
+                        if (ref.watch(offlineStatusProvider(widget.video.id)) == 'complete')
+                          Positioned(
+                            left: 6,
+                            bottom: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Icon(
+                                Icons.offline_pin,
+                                color: NullFeedTheme.successColor,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+
                         // Play icon overlay on highlight
                         if (_isHighlighted)
                           Container(
@@ -204,14 +225,31 @@ class _VideoCardState extends State<VideoCard> {
                 if (widget.channel != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      widget.channel!.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: NullFeedTheme.textMuted,
-                        fontSize: 12,
-                      ),
+                    child: Row(
+                      children: [
+                        if (widget.channel!.avatarUrl != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: CircleAvatar(
+                              radius: 10,
+                              backgroundImage: CachedNetworkImageProvider(
+                                widget.channel!.avatarUrl!,
+                              ),
+                              backgroundColor: NullFeedTheme.cardColor,
+                            ),
+                          ),
+                        Expanded(
+                          child: Text(
+                            widget.channel!.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: NullFeedTheme.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
