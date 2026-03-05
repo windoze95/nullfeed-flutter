@@ -120,6 +120,13 @@ class ApiService {
     );
   }
 
+  Future<Channel> refreshChannelImages(String channelId) async {
+    final response = await _dio.post(
+      '$_baseUrl${AppConstants.channelRefreshImages(channelId)}',
+    );
+    return Channel.fromJson(response.data as Map<String, dynamic>);
+  }
+
   Future<void> unsubscribeFromChannel(String channelId) async {
     await _dio.delete('$_baseUrl${AppConstants.channelUnsubscribe(channelId)}');
   }

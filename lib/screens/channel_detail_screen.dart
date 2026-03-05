@@ -27,6 +27,22 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   final Set<String> _pendingVideoIds = {};
 
   @override
+  void initState() {
+    super.initState();
+    _refreshChannelImages();
+  }
+
+  Future<void> _refreshChannelImages() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.refreshChannelImages(widget.channelId);
+      ref.invalidate(channelDetailProvider(widget.channelId));
+    } catch (_) {
+      // Non-critical — channel still loads with cached images
+    }
+  }
+
+  @override
   void dispose() {
     _pollTimer?.cancel();
     super.dispose();
