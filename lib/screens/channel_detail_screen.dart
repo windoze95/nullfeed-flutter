@@ -34,9 +34,24 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
 
   Future<void> _refreshChannelImages() async {
     try {
+      // Snapshot current URLs before refresh
+      final oldChannel = ref.read(channelDetailProvider(widget.channelId)).valueOrNull;
+      final oldBanner = oldChannel?.bannerUrl;
+      final oldAvatar = oldChannel?.avatarUrl;
+
       final api = ref.read(apiServiceProvider);
-      await api.refreshChannelImages(widget.channelId);
+      final updated = await api.refreshChannelImages(widget.channelId);
+
+      // Evict stale images from cache if URLs changed
+      if (oldBanner != null && oldBanner != updated.bannerUrl) {
+        CachedNetworkImage.evictFromCache(oldBanner);
+      }
+      if (oldAvatar != null && oldAvatar != updated.avatarUrl) {
+        CachedNetworkImage.evictFromCache(oldAvatar);
+      }
+
       ref.invalidate(channelDetailProvider(widget.channelId));
+      ref.invalidate(channelsProvider);
     } catch (_) {
       // Non-critical — channel still loads with cached images
     }
