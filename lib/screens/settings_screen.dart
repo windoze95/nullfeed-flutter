@@ -117,7 +117,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 controller: _serverUrlController,
                                 decoration: InputDecoration(
                                   labelText: 'Server URL',
-                                  hintText: 'http://192.168.1.100:8484',
+                                  hintText: 'http://192.168.20.158:8484',
                                   suffixIcon: Icon(
                                     settings.isServerReachable
                                         ? Icons.check_circle

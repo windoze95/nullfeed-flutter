@@ -115,7 +115,7 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
                   child: TextField(
                     controller: _serverUrlController,
                     decoration: const InputDecoration(
-                      hintText: 'http://192.168.1.100:8484',
+                      hintText: 'http://192.168.20.158:8484',
                       prefixIcon: Icon(Icons.dns_outlined),
                     ),
                     onSubmitted: (_) => _connectToServer(),
