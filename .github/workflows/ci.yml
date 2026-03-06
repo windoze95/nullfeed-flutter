@@ -119,6 +119,15 @@ jobs:
       - name: Run code generation
         run: dart run build_runner build --delete-conflicting-outputs
 
+      - name: Disable code signing for CI
+        run: |
+          cat > ios/ci.xcconfig << 'XCEOF'
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGN_IDENTITY=
+          XCEOF
+          echo '#include "ci.xcconfig"' >> ios/Flutter/Release.xcconfig
+
       - name: Build iOS (release, no codesign)
         run: flutter build ios --release --no-codesign
 
