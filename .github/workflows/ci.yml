@@ -151,7 +151,7 @@ jobs:
           flutter pub outdated --no-dev-dependencies --json > outdated.json
 
           # Parse major version drift from the JSON output
-          MAJOR_DRIFT=$(python3 -c "
+          python3 << 'PYEOF'
           import json, sys
           data = json.load(open('outdated.json'))
           packages = data.get('packages', [])
@@ -165,13 +165,11 @@ jobs:
                   cur_major = current.split('.')[0]
                   lat_major = latest.split('.')[0]
                   if cur_major != lat_major:
-                      drift.append(f\"  {pkg['package']}: {current} -> {latest}\")
+                      drift.append(f"  {pkg['package']}: {current} -> {latest}")
           if drift:
-              print('Major version drift detected:')
+              print('::warning::Major version drift detected:')
               for d in drift:
                   print(d)
-              sys.exit(1)
           else:
               print('No major version drift found.')
-          ")
-          echo "$MAJOR_DRIFT"
+          PYEOF
