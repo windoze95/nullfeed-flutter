@@ -2,20 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/feed.dart';
 import '../services/api_service.dart';
 
-final continueWatchingProvider =
-    FutureProvider<List<FeedItem>>((ref) async {
+final continueWatchingProvider = FutureProvider<List<FeedItem>>((ref) async {
   final api = ref.watch(apiServiceProvider);
   return api.getContinueWatching();
 });
 
-final newEpisodesProvider =
-    FutureProvider<List<FeedItem>>((ref) async {
+final newEpisodesProvider = FutureProvider<List<FeedItem>>((ref) async {
   final api = ref.watch(apiServiceProvider);
   return api.getNewEpisodes();
 });
 
-final recentlyAddedProvider =
-    FutureProvider<List<FeedItem>>((ref) async {
+final recentlyAddedProvider = FutureProvider<List<FeedItem>>((ref) async {
   final api = ref.watch(apiServiceProvider);
   return api.getRecentlyAdded();
 });

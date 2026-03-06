@@ -7,7 +7,6 @@ import 'auth_provider.dart';
 import 'download_progress_provider.dart';
 import 'feed_provider.dart';
 import 'discover_provider.dart';
-import 'offline_provider.dart';
 
 final webSocketServiceProvider = Provider<WebSocketService>((ref) {
   final service = WebSocketService();
@@ -34,7 +33,8 @@ final webSocketConnectionProvider = Provider<void>((ref) {
           final pct = (event.data['percentage'] as num?)?.toDouble();
           if (videoId != null && pct != null) {
             final current = Map<String, double>.from(
-                ref.read(downloadProgressProvider));
+              ref.read(downloadProgressProvider),
+            );
             current[videoId] = pct;
             ref.read(downloadProgressProvider.notifier).state = current;
           }
@@ -42,7 +42,8 @@ final webSocketConnectionProvider = Provider<void>((ref) {
           final completedId = event.data['video_id'] as String?;
           if (completedId != null) {
             final current = Map<String, double>.from(
-                ref.read(downloadProgressProvider));
+              ref.read(downloadProgressProvider),
+            );
             current.remove(completedId);
             ref.read(downloadProgressProvider.notifier).state = current;
           }

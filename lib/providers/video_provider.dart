@@ -2,18 +2,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
 
-final videoDetailProvider =
-    FutureProvider.family<Video, String>((ref, videoId) async {
+final videoDetailProvider = FutureProvider.family<Video, String>((
+  ref,
+  videoId,
+) async {
   final api = ref.watch(apiServiceProvider);
   return api.getVideo(videoId);
 });
 
 final videoProgressProvider =
-    StateNotifierProvider.family<VideoProgressNotifier, int, String>(
-        (ref, videoId) {
-  final api = ref.watch(apiServiceProvider);
-  return VideoProgressNotifier(api, videoId);
-});
+    StateNotifierProvider.family<VideoProgressNotifier, int, String>((
+      ref,
+      videoId,
+    ) {
+      final api = ref.watch(apiServiceProvider);
+      return VideoProgressNotifier(api, videoId);
+    });
 
 class VideoProgressNotifier extends StateNotifier<int> {
   final ApiService _api;

@@ -1,18 +1,11 @@
 import 'package:flutter/material.dart';
 
-enum DeviceType {
-  phone,
-  tablet,
-  tv,
-}
+enum DeviceType { phone, tablet, tv }
 
 class AdaptiveLayout extends StatelessWidget {
   final Widget Function(BuildContext context, DeviceType deviceType) builder;
 
-  const AdaptiveLayout({
-    super.key,
-    required this.builder,
-  });
+  const AdaptiveLayout({super.key, required this.builder});
 
   static DeviceType getDeviceType(BuildContext context) {
     final size = MediaQuery.sizeOf(context);

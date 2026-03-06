@@ -29,10 +29,12 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   final StorageService _storage;
 
   SettingsNotifier(this._storage)
-      : super(SettingsState(
+    : super(
+        SettingsState(
           serverUrl: _storage.getServerUrl(),
           preferredQuality: _storage.getPreferredQuality(),
-        ));
+        ),
+      );
 
   Future<void> setServerUrl(String url) async {
     await _storage.setServerUrl(url);
@@ -49,10 +51,11 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   }
 }
 
-final settingsProvider =
-    StateNotifierProvider<SettingsNotifier, SettingsState>((ref) {
-  final storage = ref.watch(storageServiceProvider);
-  return SettingsNotifier(storage);
-});
+final settingsProvider = StateNotifierProvider<SettingsNotifier, SettingsState>(
+  (ref) {
+    final storage = ref.watch(storageServiceProvider);
+    return SettingsNotifier(storage);
+  },
+);
 
 final qualityOptions = ['720p', '1080p', '4k', 'best'];

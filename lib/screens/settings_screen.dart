@@ -20,8 +20,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
-    _serverUrlController =
-        TextEditingController(text: settings.serverUrl ?? '');
+    _serverUrlController = TextEditingController(
+      text: settings.serverUrl ?? '',
+    );
     _checkServer();
   }
 
@@ -50,9 +51,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: CustomScrollView(
         slivers: [
           if (!isTv)
-            SliverAppBar(
+            const SliverAppBar(
               floating: true,
-              title: const Text('Settings'),
+              title: Text('Settings'),
               backgroundColor: NullFeedTheme.backgroundColor,
             )
           else
@@ -69,7 +70,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Profile section
-                      _SectionHeader(title: 'Profile'),
+                      const _SectionHeader(title: 'Profile'),
                       Card(
                         child: ListTile(
                           leading: CircleAvatar(
@@ -79,7 +80,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               authState.currentUser?.displayName.isNotEmpty ==
                                       true
                                   ? authState.currentUser!.displayName[0]
-                                      .toUpperCase()
+                                        .toUpperCase()
                                   : '?',
                               style: const TextStyle(
                                 color: NullFeedTheme.primaryColor,
@@ -96,9 +97,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 : 'User',
                           ),
                           trailing: OutlinedButton(
-                            onPressed: () => ref
-                                .read(authStateProvider.notifier)
-                                .signOut(),
+                            onPressed: () =>
+                                ref.read(authStateProvider.notifier).signOut(),
                             child: const Text('Switch Profile'),
                           ),
                         ),
@@ -106,7 +106,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 24),
 
                       // Server section
-                      _SectionHeader(title: 'Server Connection'),
+                      const _SectionHeader(title: 'Server Connection'),
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -138,8 +138,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   const SizedBox(width: 12),
                                   ElevatedButton(
                                     onPressed: () {
-                                      final url =
-                                          _serverUrlController.text.trim();
+                                      final url = _serverUrlController.text
+                                          .trim();
                                       if (url.isNotEmpty) {
                                         ref
                                             .read(settingsProvider.notifier)
@@ -170,35 +170,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 24),
 
                       // Quality section
-                      _SectionHeader(title: 'Download Quality'),
+                      const _SectionHeader(title: 'Download Quality'),
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(8),
-                          child: Column(
-                            children: qualityOptions
-                                .map(
-                                  (quality) => RadioListTile<String>(
-                                    title: Text(quality),
-                                    value: quality,
-                                    groupValue: settings.preferredQuality,
-                                    activeColor: NullFeedTheme.primaryColor,
-                                    onChanged: (value) {
-                                      if (value != null) {
-                                        ref
-                                            .read(settingsProvider.notifier)
-                                            .setPreferredQuality(value);
-                                      }
-                                    },
-                                  ),
-                                )
-                                .toList(),
+                          child: RadioGroup<String>(
+                            groupValue: settings.preferredQuality,
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(settingsProvider.notifier)
+                                    .setPreferredQuality(value);
+                              }
+                            },
+                            child: Column(
+                              children: qualityOptions
+                                  .map(
+                                    (quality) => RadioListTile<String>(
+                                      title: Text(quality),
+                                      value: quality,
+                                      activeColor: NullFeedTheme.primaryColor,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 24),
 
                       // About section
-                      _SectionHeader(title: 'About'),
+                      const _SectionHeader(title: 'About'),
                       Card(
                         child: Column(
                           children: [
@@ -211,7 +213,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               leading: const Icon(Icons.code),
                               title: const Text('Server URL'),
                               subtitle: Text(
-                                  settings.serverUrl ?? 'Not configured'),
+                                settings.serverUrl ?? 'Not configured',
+                              ),
                             ),
                           ],
                         ),
@@ -237,10 +240,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
+      child: Text(title, style: Theme.of(context).textTheme.titleLarge),
     );
   }
 }

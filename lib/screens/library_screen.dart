@@ -76,9 +76,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 padding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _TVAddButton(onSelect: _showSubscribeDialog),
-                  ],
+                  children: [_TVAddButton(onSelect: _showSubscribeDialog)],
                 ),
               ),
             ),
@@ -121,16 +119,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     crossAxisSpacing: isTv ? 20 : 12,
                     mainAxisSpacing: isTv ? 20 : 12,
                   ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final channel = channelList[index];
-                      return ChannelCard(
-                        channel: channel,
-                        onTap: () => context.push('/channel/${channel.id}'),
-                      );
-                    },
-                    childCount: channelList.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final channel = channelList[index];
+                    return ChannelCard(
+                      channel: channel,
+                      onTap: () => context.push('/channel/${channel.id}'),
+                    );
+                  }, childCount: channelList.length),
                 ),
               );
             },
@@ -142,11 +137,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline,
-                        size: 48, color: NullFeedTheme.errorColor),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: NullFeedTheme.errorColor,
+                    ),
                     const SizedBox(height: 16),
-                    Text('Failed to load channels',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Failed to load channels',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: () =>
@@ -203,11 +203,13 @@ class _TVAddButtonState extends State<_TVAddButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add,
-                  color: _isFocused
-                      ? NullFeedTheme.primaryColor
-                      : NullFeedTheme.textSecondary,
-                  size: 20),
+              Icon(
+                Icons.add,
+                color: _isFocused
+                    ? NullFeedTheme.primaryColor
+                    : NullFeedTheme.textSecondary,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Add Channel',

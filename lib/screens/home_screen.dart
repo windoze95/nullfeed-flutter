@@ -29,9 +29,9 @@ class HomeScreen extends ConsumerWidget {
     Widget body = CustomScrollView(
       slivers: [
         if (!isTv)
-          SliverAppBar(
+          const SliverAppBar(
             floating: true,
-            title: const Row(
+            title: Row(
               children: [
                 Icon(
                   Icons.rss_feed,
@@ -72,11 +72,13 @@ class HomeScreen extends ConsumerWidget {
                   return ContentRow(
                     title: 'Continue Watching',
                     children: items
-                        .map((item) => VideoCard(
-                              video: item.video,
-                              channel: item.channel,
-                              showProgress: true,
-                            ))
+                        .map(
+                          (item) => VideoCard(
+                            video: item.video,
+                            channel: item.channel,
+                            showProgress: true,
+                          ),
+                        )
                         .toList(),
                   );
                 },
@@ -93,10 +95,12 @@ class HomeScreen extends ConsumerWidget {
                   return ContentRow(
                     title: 'New Episodes',
                     children: items
-                        .map((item) => VideoCard(
-                              video: item.video,
-                              channel: item.channel,
-                            ))
+                        .map(
+                          (item) => VideoCard(
+                            video: item.video,
+                            channel: item.channel,
+                          ),
+                        )
                         .toList(),
                   );
                 },
@@ -113,10 +117,12 @@ class HomeScreen extends ConsumerWidget {
                   return ContentRow(
                     title: 'Recently Added',
                     children: items
-                        .map((item) => VideoCard(
-                              video: item.video,
-                              channel: item.channel,
-                            ))
+                        .map(
+                          (item) => VideoCard(
+                            video: item.video,
+                            channel: item.channel,
+                          ),
+                        )
                         .toList(),
                   );
                 },
@@ -198,11 +204,13 @@ class _TVActionButtonState extends State<_TVActionButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon,
-                  color: _isFocused
-                      ? NullFeedTheme.primaryColor
-                      : NullFeedTheme.textSecondary,
-                  size: 20),
+              Icon(
+                widget.icon,
+                color: _isFocused
+                    ? NullFeedTheme.primaryColor
+                    : NullFeedTheme.textSecondary,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 widget.label,

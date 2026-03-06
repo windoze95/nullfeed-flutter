@@ -57,9 +57,7 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
         content: TextField(
           controller: nameController,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Display name',
-          ),
+          decoration: const InputDecoration(hintText: 'Display name'),
         ),
         actions: [
           TextButton(
@@ -251,7 +249,7 @@ class _ProfileCardState extends State<_ProfileCard> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             transform: _isHighlighted
-                ? (Matrix4.identity()..scale(1.05))
+                ? (Matrix4.identity()..scaleByDouble(1.05, 1.05, 1.0, 1.0))
                 : Matrix4.identity(),
             transformAlignment: Alignment.center,
             child: Column(
@@ -274,8 +272,9 @@ class _ProfileCardState extends State<_ProfileCard> {
                     boxShadow: _isFocused
                         ? [
                             BoxShadow(
-                              color: NullFeedTheme.primaryColor
-                                  .withValues(alpha: 0.3),
+                              color: NullFeedTheme.primaryColor.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 16,
                               spreadRadius: 2,
                             ),

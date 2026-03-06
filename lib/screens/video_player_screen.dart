@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import '../models/video.dart';
-import '../providers/video_provider.dart';
 import '../providers/websocket_provider.dart';
 import '../services/api_service.dart';
 import '../services/offline_service.dart';
@@ -68,7 +67,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
           // Resume from saved position if available
           final video = await _api.getVideo(widget.videoId);
           if (video.watchPositionSeconds > 0) {
-            final resumePos = (video.watchPositionSeconds - 10).clamp(0, video.durationSeconds);
+            final resumePos = (video.watchPositionSeconds - 10).clamp(
+              0,
+              video.durationSeconds,
+            );
             await controller.seekTo(Duration(seconds: resumePos));
           }
 
@@ -125,7 +127,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
   }
 
-  Future<void> _startPlayback(String url, Video video, {bool isPreview = false}) async {
+  Future<void> _startPlayback(
+    String url,
+    Video video, {
+    bool isPreview = false,
+  }) async {
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
 
     try {
@@ -140,7 +146,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
     // Rewind 10s on resume so user can re-orient
     if (video.watchPositionSeconds > 0) {
-      final resumePos = (video.watchPositionSeconds - 10).clamp(0, video.durationSeconds);
+      final resumePos = (video.watchPositionSeconds - 10).clamp(
+        0,
+        video.durationSeconds,
+      );
       await controller.seekTo(Duration(seconds: resumePos));
     }
 
@@ -218,7 +227,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
     try {
       final streamUrl = _api.getVideoStreamUrl(widget.videoId);
-      final hqController = VideoPlayerController.networkUrl(Uri.parse(streamUrl));
+      final hqController = VideoPlayerController.networkUrl(
+        Uri.parse(streamUrl),
+      );
       await hqController.initialize();
       await hqController.seekTo(currentPosition);
       await hqController.play();
@@ -379,8 +390,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.error_outline,
-                            color: Colors.red, size: 48),
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 48,
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           _error!,
@@ -488,15 +502,12 @@ class _ControlsOverlay extends StatelessWidget {
           // Top bar
           SafeArea(
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTv ? 60.0 : 8.0,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: isTv ? 60.0 : 8.0),
               child: Row(
                 children: [
                   if (!isTv)
                     IconButton(
-                      icon:
-                          const Icon(Icons.arrow_back, color: Colors.white),
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: onBack,
                     ),
                   if (isTv)
@@ -543,8 +554,7 @@ class _ControlsOverlay extends StatelessWidget {
                   SizedBox(width: isTv ? 48 : 32),
                   IconButton(
                     iconSize: isTv ? 64 : 48,
-                    icon:
-                        const Icon(Icons.forward_10, color: Colors.white),
+                    icon: const Icon(Icons.forward_10, color: Colors.white),
                     onPressed: () {
                       onSeekRelative(AppConstants.skipForwardSeconds);
                       onInteraction();
@@ -572,8 +582,7 @@ class _ControlsOverlay extends StatelessWidget {
                     children: [
                       NullFeedProgressBar(
                         progress: duration.inMilliseconds > 0
-                            ? position.inMilliseconds /
-                                duration.inMilliseconds
+                            ? position.inMilliseconds / duration.inMilliseconds
                             : 0,
                         height: isTv ? 6 : 4,
                         onSeek: isTv
@@ -600,22 +609,28 @@ class _ControlsOverlay extends StatelessWidget {
                             ),
                           ),
                           if (isTv)
-                            Row(
+                            const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.arrow_back_ios,
-                                    color: NullFeedTheme.primaryColor,
-                                    size: 14),
-                                const SizedBox(width: 4),
-                                const Text(
+                                Icon(
+                                  Icons.arrow_back_ios,
+                                  color: NullFeedTheme.primaryColor,
+                                  size: 14,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
                                   'Swipe to seek',
                                   style: TextStyle(
-                                      color: Colors.white38, fontSize: 13),
+                                    color: Colors.white38,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                                const SizedBox(width: 4),
-                                Icon(Icons.arrow_forward_ios,
-                                    color: NullFeedTheme.primaryColor,
-                                    size: 14),
+                                SizedBox(width: 4),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: NullFeedTheme.primaryColor,
+                                  size: 14,
+                                ),
                               ],
                             ),
                           Text(
@@ -643,8 +658,8 @@ class _ControlsOverlay extends StatelessWidget {
     final minutes = d.inMinutes.remainder(60);
     final seconds = d.inSeconds.remainder(60);
     if (hours > 0) {
-      return '${hours}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
-    return '${minutes}:${seconds.toString().padLeft(2, '0')}';
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
