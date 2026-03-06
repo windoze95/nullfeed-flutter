@@ -35,7 +35,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   Future<void> _refreshChannelImages() async {
     try {
       // Snapshot current URLs before refresh
-      final oldChannel = ref.read(channelDetailProvider(widget.channelId)).valueOrNull;
+      final oldChannel = ref
+          .read(channelDetailProvider(widget.channelId))
+          .value;
       final oldBanner = oldChannel?.bannerUrl;
       final oldAvatar = oldChannel?.avatarUrl;
 
