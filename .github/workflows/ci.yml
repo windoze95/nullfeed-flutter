@@ -173,3 +173,31 @@ jobs:
           else:
               print('No major version drift found.')
           PYEOF
+
+  agent-rules-sync:
+    name: Agent Rules Sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check agent instruction files are in sync
+        run: |
+          TARGETS=".cursorrules .windsurfrules .clinerules .continuerules CLAUDE.md .github/copilot-instructions.md"
+          OUT_OF_SYNC=""
+          for target in $TARGETS; do
+            if [ ! -f "$target" ]; then
+              echo "::error::Missing: $target (run scripts/sync-agent-rules.sh)"
+              OUT_OF_SYNC="$OUT_OF_SYNC $target"
+            elif ! diff -q AGENTS.md "$target" > /dev/null 2>&1; then
+              echo "::error::Out of sync: $target differs from AGENTS.md"
+              OUT_OF_SYNC="$OUT_OF_SYNC $target"
+            else
+              echo "OK: $target"
+            fi
+          done
+          if [ -n "$OUT_OF_SYNC" ]; then
+            echo ""
+            echo "Run './scripts/sync-agent-rules.sh' to fix."
+            exit 1
+          fi
+          echo "All agent instruction files are in sync."
