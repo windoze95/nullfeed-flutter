@@ -121,8 +121,8 @@ jobs:
 
       - name: Disable code signing for CI
         run: |
-          printf 'CODE_SIGNING_REQUIRED=NO\nCODE_SIGNING_ALLOWED=NO\nCODE_SIGN_IDENTITY=\n' > ios/ci.xcconfig
-          echo '#include "ci.xcconfig"' >> ios/Flutter/Release.xcconfig
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "iPhone Developer"/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = ""/' ios/Runner.xcodeproj/project.pbxproj
 
       - name: Build iOS (release, no codesign)
         run: flutter build ios --release --no-codesign
