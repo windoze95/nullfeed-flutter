@@ -4,7 +4,7 @@ part 'channel.freezed.dart';
 part 'channel.g.dart';
 
 @freezed
-class Channel with _$Channel {
+abstract class Channel with _$Channel {
   const factory Channel({
     required String id,
     @JsonKey(name: 'youtube_channel_id') required String youtubeChannelId,

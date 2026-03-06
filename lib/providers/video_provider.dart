@@ -10,20 +10,17 @@ final videoDetailProvider = FutureProvider.family<Video, String>((
   return api.getVideo(videoId);
 });
 
-final videoProgressProvider =
-    StateNotifierProvider.family<VideoProgressNotifier, int, String>((
-      ref,
-      videoId,
-    ) {
-      final api = ref.watch(apiServiceProvider);
-      return VideoProgressNotifier(api, videoId);
-    });
+class VideoProgressNotifier extends Notifier<int> {
+  late final String _videoId;
 
-class VideoProgressNotifier extends StateNotifier<int> {
-  final ApiService _api;
-  final String _videoId;
+  @override
+  int build() => 0;
 
-  VideoProgressNotifier(this._api, this._videoId) : super(0);
+  void init(String videoId) {
+    _videoId = videoId;
+  }
+
+  ApiService get _api => ref.read(apiServiceProvider);
 
   void setPosition(int seconds) {
     state = seconds;
@@ -41,3 +38,10 @@ class VideoProgressNotifier extends StateNotifier<int> {
     await _api.deleteVideo(_videoId);
   }
 }
+
+final videoProgressProvider =
+    NotifierProvider.family<VideoProgressNotifier, int, String>((videoId) {
+      final notifier = VideoProgressNotifier();
+      notifier.init(videoId);
+      return notifier;
+    });

@@ -6,7 +6,7 @@ part 'feed.freezed.dart';
 part 'feed.g.dart';
 
 @freezed
-class FeedItem with _$FeedItem {
+abstract class FeedItem with _$FeedItem {
   const factory FeedItem({required Channel channel, required Video video}) =
       _FeedItem;
 
@@ -15,7 +15,7 @@ class FeedItem with _$FeedItem {
 }
 
 @freezed
-class HomeFeed with _$HomeFeed {
+abstract class HomeFeed with _$HomeFeed {
   const factory HomeFeed({
     @JsonKey(name: 'continue_watching')
     @Default([])

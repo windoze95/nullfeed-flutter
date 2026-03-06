@@ -13,7 +13,7 @@ enum RetentionPolicy {
 }
 
 @freezed
-class Subscription with _$Subscription {
+abstract class Subscription with _$Subscription {
   const factory Subscription({
     @JsonKey(name: 'user_id') required String userId,
     @JsonKey(name: 'channel_id') required String channelId,

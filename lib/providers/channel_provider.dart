@@ -3,18 +3,14 @@ import '../models/channel.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
 
-final channelsProvider =
-    StateNotifierProvider<ChannelsNotifier, AsyncValue<List<Channel>>>((ref) {
-      final api = ref.watch(apiServiceProvider);
-      return ChannelsNotifier(api);
-    });
-
-class ChannelsNotifier extends StateNotifier<AsyncValue<List<Channel>>> {
-  final ApiService _api;
-
-  ChannelsNotifier(this._api) : super(const AsyncValue.loading()) {
+class ChannelsNotifier extends Notifier<AsyncValue<List<Channel>>> {
+  @override
+  AsyncValue<List<Channel>> build() {
     load();
+    return const AsyncValue.loading();
   }
+
+  ApiService get _api => ref.read(apiServiceProvider);
 
   Future<void> load() async {
     state = const AsyncValue.loading();
@@ -47,6 +43,11 @@ class ChannelsNotifier extends StateNotifier<AsyncValue<List<Channel>>> {
     }
   }
 }
+
+final channelsProvider =
+    NotifierProvider<ChannelsNotifier, AsyncValue<List<Channel>>>(
+      ChannelsNotifier.new,
+    );
 
 final channelDetailProvider = FutureProvider.family<Channel, String>((
   ref,

@@ -134,9 +134,9 @@ class HomeScreen extends ConsumerWidget {
                 error: (_, __) => const SizedBox.shrink(),
               ),
               // Empty state
-              if (continueWatching.valueOrNull?.isEmpty == true &&
-                  newEpisodes.valueOrNull?.isEmpty == true &&
-                  recentlyAdded.valueOrNull?.isEmpty == true)
+              if (continueWatching.value?.isEmpty == true &&
+                  newEpisodes.value?.isEmpty == true &&
+                  recentlyAdded.value?.isEmpty == true)
                 const _EmptyHomeState(),
               const SizedBox(height: 24),
             ],
