@@ -51,7 +51,10 @@ class ApiService {
         .toList();
   }
 
-  Future<({User user, String token})> selectProfile(String userId, {String? pin}) async {
+  Future<({User user, String token})> selectProfile(
+    String userId, {
+    String? pin,
+  }) async {
     final response = await _dio.post(
       '$_baseUrl${AppConstants.authSelect}',
       data: {'user_id': userId, if (pin != null) 'pin': pin},
@@ -87,23 +90,30 @@ class ApiService {
   }
 
   Future<Channel> getChannel(String id) async {
-    final response =
-        await _dio.get('$_baseUrl${AppConstants.channelDetail(id)}');
+    final response = await _dio.get(
+      '$_baseUrl${AppConstants.channelDetail(id)}',
+    );
     return Channel.fromJson(response.data as Map<String, dynamic>);
   }
 
   Future<List<Video>> getChannelVideos(String channelId) async {
-    final response =
-        await _dio.get('$_baseUrl${AppConstants.channelVideos(channelId)}');
+    final response = await _dio.get(
+      '$_baseUrl${AppConstants.channelVideos(channelId)}',
+    );
     final data = response.data;
     // Backend returns paginated response {items: [...], total, page, per_page}
-    final List items = data is Map ? (data['items'] as List? ?? []) : (data as List);
+    final List items = data is Map
+        ? (data['items'] as List? ?? [])
+        : (data as List);
     return items
         .map((json) => Video.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 
-  Future<void> subscribeToChannel(String youtubeUrl, {String trackingMode = 'FUTURE_ONLY'}) async {
+  Future<void> subscribeToChannel(
+    String youtubeUrl, {
+    String trackingMode = 'FUTURE_ONLY',
+  }) async {
     await _dio.post(
       '$_baseUrl${AppConstants.channelSubscribe}',
       data: {'url': youtubeUrl, 'tracking_mode': trackingMode},
@@ -111,14 +121,12 @@ class ApiService {
   }
 
   Future<void> unsubscribeFromChannel(String channelId) async {
-    await _dio
-        .delete('$_baseUrl${AppConstants.channelUnsubscribe(channelId)}');
+    await _dio.delete('$_baseUrl${AppConstants.channelUnsubscribe(channelId)}');
   }
 
   // Downloads
   Future<List<Video>> getActiveDownloads() async {
-    final response =
-        await _dio.get('$_baseUrl${AppConstants.activeDownloads}');
+    final response = await _dio.get('$_baseUrl${AppConstants.activeDownloads}');
     return (response.data as List)
         .map((json) => Video.fromJson(json as Map<String, dynamic>))
         .toList();
@@ -126,8 +134,7 @@ class ApiService {
 
   // Videos
   Future<Video> getVideo(String id) async {
-    final response =
-        await _dio.get('$_baseUrl${AppConstants.videoDetail(id)}');
+    final response = await _dio.get('$_baseUrl${AppConstants.videoDetail(id)}');
     return Video.fromJson(response.data as Map<String, dynamic>);
   }
 
@@ -168,24 +175,25 @@ class ApiService {
 
   // Feed
   Future<List<FeedItem>> getContinueWatching() async {
-    final response =
-        await _dio.get('$_baseUrl${AppConstants.feedContinueWatching}');
+    final response = await _dio.get(
+      '$_baseUrl${AppConstants.feedContinueWatching}',
+    );
     return (response.data as List)
         .map((json) => FeedItem.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 
   Future<List<FeedItem>> getNewEpisodes() async {
-    final response =
-        await _dio.get('$_baseUrl${AppConstants.feedNewEpisodes}');
+    final response = await _dio.get('$_baseUrl${AppConstants.feedNewEpisodes}');
     return (response.data as List)
         .map((json) => FeedItem.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 
   Future<List<FeedItem>> getRecentlyAdded() async {
-    final response =
-        await _dio.get('$_baseUrl${AppConstants.feedRecentlyAdded}');
+    final response = await _dio.get(
+      '$_baseUrl${AppConstants.feedRecentlyAdded}',
+    );
     return (response.data as List)
         .map((json) => FeedItem.fromJson(json as Map<String, dynamic>))
         .toList();

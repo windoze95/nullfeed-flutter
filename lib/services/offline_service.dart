@@ -127,9 +127,7 @@ class OfflineService {
   }
 
   List<Map<String, dynamic>> getOfflineVideos() {
-    return _box.values
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    return _box.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
   int getTotalOfflineSize() {

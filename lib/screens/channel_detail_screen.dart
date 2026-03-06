@@ -99,9 +99,8 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                       CachedNetworkImage(
                         imageUrl: channel.bannerUrl!,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => Container(
-                          color: NullFeedTheme.cardColor,
-                        ),
+                        errorWidget: (_, __, ___) =>
+                            Container(color: NullFeedTheme.cardColor),
                       )
                     else
                       Container(color: NullFeedTheme.cardColor),
@@ -112,8 +111,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            NullFeedTheme.backgroundColor
-                                .withValues(alpha: 0.9),
+                            NullFeedTheme.backgroundColor.withValues(
+                              alpha: 0.9,
+                            ),
                           ],
                         ),
                       ),
@@ -133,8 +133,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                         if (channel.avatarUrl != null)
                           CircleAvatar(
                             radius: isTv ? 40 : 32,
-                            backgroundImage:
-                                CachedNetworkImageProvider(channel.avatarUrl!),
+                            backgroundImage: CachedNetworkImageProvider(
+                              channel.avatarUrl!,
+                            ),
                           )
                         else
                           CircleAvatar(
@@ -159,8 +160,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                             children: [
                               Text(
                                 channel.name,
-                                style:
-                                    Theme.of(context).textTheme.headlineSmall,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall,
                               ),
                               if (channel.description != null &&
                                   channel.description!.isNotEmpty)
@@ -168,8 +170,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                                   channel.description!,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style:
-                                      Theme.of(context).textTheme.bodyMedium,
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                             ],
                           ),
@@ -185,8 +186,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                         if (completeVideos.isEmpty) {
                           return const SizedBox.shrink();
                         }
-                        final firstUnwatched =
-                            completeVideos.where((v) => !v.isWatched);
+                        final firstUnwatched = completeVideos.where(
+                          (v) => !v.isWatched,
+                        );
                         final resumeVideo = firstUnwatched.isNotEmpty
                             ? firstUnwatched.first
                             : completeVideos.first;
@@ -197,12 +199,12 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                           child: ElevatedButton.icon(
                             onPressed: () async {
                               await context.push('/player/${resumeVideo.id}');
-                              ref.invalidate(channelVideosProvider(widget.channelId));
+                              ref.invalidate(
+                                channelVideosProvider(widget.channelId),
+                              );
                             },
                             icon: const Icon(Icons.play_arrow, size: 24),
-                            label: Text(
-                              hasProgress ? 'Resume' : 'Play Next',
-                            ),
+                            label: Text(hasProgress ? 'Resume' : 'Play Next'),
                           ),
                         );
                       },
@@ -261,28 +263,27 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                   );
                 }
                 return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final video = displayVideos[index];
-                      return VideoListTile(
-                        video: video,
-                        downloadProgress: progressMap[video.id],
-                        onTap: (video.isPlayable || video.isInProgress)
-                            ? () async {
-                                await context.push('/player/${video.id}');
-                                ref.invalidate(channelVideosProvider(widget.channelId));
-                              }
-                            : null,
-                        onDownload: video.isDownloadable
-                            ? () => _onDownload(video)
-                            : null,
-                        onCancel: video.isInProgress
-                            ? () => _onCancelDownload(video)
-                            : null,
-                      );
-                    },
-                    childCount: displayVideos.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final video = displayVideos[index];
+                    return VideoListTile(
+                      video: video,
+                      downloadProgress: progressMap[video.id],
+                      onTap: (video.isPlayable || video.isInProgress)
+                          ? () async {
+                              await context.push('/player/${video.id}');
+                              ref.invalidate(
+                                channelVideosProvider(widget.channelId),
+                              );
+                            }
+                          : null,
+                      onDownload: video.isDownloadable
+                          ? () => _onDownload(video)
+                          : null,
+                      onCancel: video.isInProgress
+                          ? () => _onCancelDownload(video)
+                          : null,
+                    );
+                  }, childCount: displayVideos.length),
                 );
               },
               loading: () => const SliverToBoxAdapter(
@@ -312,11 +313,16 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: NullFeedTheme.errorColor),
+              const Icon(
+                Icons.error_outline,
+                size: 48,
+                color: NullFeedTheme.errorColor,
+              ),
               const SizedBox(height: 16),
-              Text('Failed to load channel',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Failed to load channel',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ],
           ),
         ),
@@ -353,9 +359,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
         _pendingVideoIds.remove(video.id);
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start download: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to start download: $e')));
       }
     }
   }

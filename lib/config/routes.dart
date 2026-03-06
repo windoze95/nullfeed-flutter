@@ -45,43 +45,37 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/home',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: HomeScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: HomeScreen()),
           ),
           GoRoute(
             path: '/library',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: LibraryScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: LibraryScreen()),
           ),
           GoRoute(
             path: '/discover',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: DiscoverScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: DiscoverScreen()),
           ),
           GoRoute(
             path: '/settings',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: SettingsScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: SettingsScreen()),
           ),
         ],
       ),
       GoRoute(
         path: '/channel/:id',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => ChannelDetailScreen(
-          channelId: state.pathParameters['id']!,
-        ),
+        builder: (context, state) =>
+            ChannelDetailScreen(channelId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/player/:id',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => VideoPlayerScreen(
-          videoId: state.pathParameters['id']!,
-        ),
+        builder: (context, state) =>
+            VideoPlayerScreen(videoId: state.pathParameters['id']!),
       ),
     ],
   );
@@ -184,8 +178,11 @@ class _TVTabBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 12),
           child: Row(
             children: [
-              const Icon(Icons.rss_feed,
-                  color: NullFeedTheme.primaryColor, size: 36),
+              const Icon(
+                Icons.rss_feed,
+                color: NullFeedTheme.primaryColor,
+                size: 36,
+              ),
               const SizedBox(width: 12),
               const Text(
                 'NullFeed',
@@ -280,8 +277,8 @@ class _TVTabItemState extends State<_TVTabItem> {
             color: _isFocused
                 ? NullFeedTheme.primaryColor.withValues(alpha: 0.2)
                 : widget.isSelected
-                    ? NullFeedTheme.primaryColor.withValues(alpha: 0.1)
-                    : Colors.transparent,
+                ? NullFeedTheme.primaryColor.withValues(alpha: 0.1)
+                : Colors.transparent,
             border: Border.all(
               color: _isFocused
                   ? NullFeedTheme.primaryColor
@@ -307,8 +304,9 @@ class _TVTabItemState extends State<_TVTabItem> {
                       ? NullFeedTheme.primaryColor
                       : NullFeedTheme.textMuted,
                   fontSize: 18,
-                  fontWeight:
-                      widget.isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: widget.isSelected
+                      ? FontWeight.w600
+                      : FontWeight.normal,
                 ),
               ),
             ],

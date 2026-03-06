@@ -8,11 +8,7 @@ class ChannelCard extends StatefulWidget {
   final Channel channel;
   final VoidCallback? onTap;
 
-  const ChannelCard({
-    super.key,
-    required this.channel,
-    this.onTap,
-  });
+  const ChannelCard({super.key, required this.channel, this.onTap});
 
   @override
   State<ChannelCard> createState() => _ChannelCardState();
@@ -45,22 +41,20 @@ class _ChannelCardState extends State<ChannelCard> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             transform: _isHighlighted
-                ? (Matrix4.identity()..scale(1.03))
+                ? (Matrix4.identity()..scaleByDouble(1.03, 1.03, 1.0, 1.0))
                 : Matrix4.identity(),
             transformAlignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: _isFocused
-                  ? Border.all(
-                      color: NullFeedTheme.primaryColor,
-                      width: 3,
-                    )
+                  ? Border.all(color: NullFeedTheme.primaryColor, width: 3)
                   : null,
               boxShadow: _isFocused
                   ? [
                       BoxShadow(
-                        color:
-                            NullFeedTheme.primaryColor.withValues(alpha: 0.3),
+                        color: NullFeedTheme.primaryColor.withValues(
+                          alpha: 0.3,
+                        ),
                         blurRadius: 16,
                         spreadRadius: 2,
                       ),
@@ -80,9 +74,8 @@ class _ChannelCardState extends State<ChannelCard> {
                       fit: BoxFit.cover,
                       errorWidget: (_, __, ___) =>
                           Container(color: NullFeedTheme.cardColor),
-                      placeholder: (_, __) => Container(
-                        color: NullFeedTheme.cardColor,
-                      ),
+                      placeholder: (_, __) =>
+                          Container(color: NullFeedTheme.cardColor),
                     )
                   else
                     Container(
@@ -91,8 +84,9 @@ class _ChannelCardState extends State<ChannelCard> {
                         child: Icon(
                           Icons.subscriptions,
                           size: 40,
-                          color: NullFeedTheme.primaryColor
-                              .withValues(alpha: 0.3),
+                          color: NullFeedTheme.primaryColor.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                       ),
                     ),

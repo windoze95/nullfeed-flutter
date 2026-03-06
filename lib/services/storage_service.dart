@@ -56,7 +56,10 @@ class StorageService {
 
   // Auto-offline channel preferences
   Set<String> getAutoOfflineChannels() {
-    final list = _settings.get(AppConstants.autoOfflineChannelsKey, defaultValue: <String>[]);
+    final list = _settings.get(
+      AppConstants.autoOfflineChannelsKey,
+      defaultValue: <String>[],
+    );
     return Set<String>.from(list as List);
   }
 

@@ -14,7 +14,8 @@ class NullFeedApp extends ConsumerWidget {
 
     return Shortcuts(
       shortcuts: <ShortcutActivator, Intent>{
-        const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
+        const SingleActivator(LogicalKeyboardKey.select):
+            const ActivateIntent(),
       },
       child: MaterialApp.router(
         title: 'NullFeed',
@@ -26,9 +27,9 @@ class NullFeedApp extends ConsumerWidget {
         builder: (context, child) {
           if (AdaptiveLayout.isTv(context)) {
             return MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: const TextScaler.linear(1.3),
-              ),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(1.3)),
               child: child!,
             );
           }

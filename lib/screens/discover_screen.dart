@@ -85,32 +85,28 @@ class DiscoverScreen extends ConsumerWidget {
               return SliverPadding(
                 padding: EdgeInsets.all(padding),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final rec = recs[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: _RecommendationCard(
-                          channelName: rec.channelName,
-                          reasoning: rec.reasoning,
-                          onDismiss: () => ref
-                              .read(discoverProvider.notifier)
-                              .dismiss(rec.id),
-                          onSubscribe: rec.youtubeChannelId != null
-                              ? () {
-                                  ref
-                                      .read(channelsProvider.notifier)
-                                      .subscribe(rec.youtubeChannelId!);
-                                  ref
-                                      .read(discoverProvider.notifier)
-                                      .dismiss(rec.id);
-                                }
-                              : null,
-                        ),
-                      );
-                    },
-                    childCount: recs.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final rec = recs[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _RecommendationCard(
+                        channelName: rec.channelName,
+                        reasoning: rec.reasoning,
+                        onDismiss: () =>
+                            ref.read(discoverProvider.notifier).dismiss(rec.id),
+                        onSubscribe: rec.youtubeChannelId != null
+                            ? () {
+                                ref
+                                    .read(channelsProvider.notifier)
+                                    .subscribe(rec.youtubeChannelId!);
+                                ref
+                                    .read(discoverProvider.notifier)
+                                    .dismiss(rec.id);
+                              }
+                            : null,
+                      ),
+                    );
+                  }, childCount: recs.length),
                 ),
               );
             },
@@ -122,11 +118,16 @@ class DiscoverScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline,
-                        size: 48, color: NullFeedTheme.errorColor),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: NullFeedTheme.errorColor,
+                    ),
                     const SizedBox(height: 16),
-                    Text('Failed to load recommendations',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Failed to load recommendations',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: () =>
@@ -193,8 +194,9 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: NullFeedTheme.primaryColor
-                            .withValues(alpha: 0.2),
+                        color: NullFeedTheme.primaryColor.withValues(
+                          alpha: 0.2,
+                        ),
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Center(
@@ -288,11 +290,13 @@ class _TVRefreshButtonState extends State<_TVRefreshButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.refresh,
-                  color: _isFocused
-                      ? NullFeedTheme.primaryColor
-                      : NullFeedTheme.textSecondary,
-                  size: 20),
+              Icon(
+                Icons.refresh,
+                color: _isFocused
+                    ? NullFeedTheme.primaryColor
+                    : NullFeedTheme.textSecondary,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Refresh',

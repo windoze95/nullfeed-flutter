@@ -39,9 +39,7 @@ class _FocusWrapperState extends State<FocusWrapper>
     _scaleAnimation = Tween<double>(
       begin: 1.0,
       end: widget.focusScale,
-    ).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
   }
 
   @override
@@ -67,7 +65,7 @@ class _FocusWrapperState extends State<FocusWrapper>
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.select ||
-             event.logicalKey == LogicalKeyboardKey.enter)) {
+                event.logicalKey == LogicalKeyboardKey.enter)) {
           widget.onSelect?.call();
           return KeyEventResult.handled;
         }
@@ -82,15 +80,14 @@ class _FocusWrapperState extends State<FocusWrapper>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: _isFocused
-                  ? Border.all(
-                      color: NullFeedTheme.primaryColor,
-                      width: 3,
-                    )
+                  ? Border.all(color: NullFeedTheme.primaryColor, width: 3)
                   : null,
               boxShadow: _isFocused
                   ? [
                       BoxShadow(
-                        color: NullFeedTheme.primaryColor.withValues(alpha: 0.3),
+                        color: NullFeedTheme.primaryColor.withValues(
+                          alpha: 0.3,
+                        ),
                         blurRadius: 16,
                         spreadRadius: 2,
                       ),

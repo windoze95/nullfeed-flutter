@@ -11,9 +11,5 @@ void main() async {
   await Hive.openBox('session');
   await Hive.openBox(AppConstants.offlineBox);
 
-  runApp(
-    const ProviderScope(
-      child: NullFeedApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: NullFeedApp()));
 }

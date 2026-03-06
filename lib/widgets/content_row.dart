@@ -29,10 +29,7 @@ class ContentRow extends StatelessWidget {
       children: [
         Padding(
           padding: EdgeInsets.fromLTRB(padding, 24, padding, 12),
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
         ),
         SizedBox(
           height: rowHeight,
@@ -42,8 +39,7 @@ class ContentRow extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   padding: EdgeInsets.symmetric(horizontal: padding),
                   itemCount: children.length,
-                  separatorBuilder: (_, __) =>
-                      SizedBox(width: isTv ? 20 : 12),
+                  separatorBuilder: (_, __) => SizedBox(width: isTv ? 20 : 12),
                   itemBuilder: (_, index) => children[index],
                 ),
         ),

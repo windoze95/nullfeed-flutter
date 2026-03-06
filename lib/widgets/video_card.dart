@@ -75,22 +75,20 @@ class _VideoCardState extends ConsumerState<VideoCard> {
             duration: const Duration(milliseconds: 200),
             width: cardWidth,
             transform: _isHighlighted
-                ? (Matrix4.identity()..scale(1.05))
+                ? (Matrix4.identity()..scaleByDouble(1.05, 1.05, 1.0, 1.0))
                 : Matrix4.identity(),
             transformAlignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: _isFocused
-                  ? Border.all(
-                      color: NullFeedTheme.primaryColor,
-                      width: 3,
-                    )
+                  ? Border.all(color: NullFeedTheme.primaryColor, width: 3)
                   : null,
               boxShadow: _isFocused
                   ? [
                       BoxShadow(
-                        color:
-                            NullFeedTheme.primaryColor.withValues(alpha: 0.3),
+                        color: NullFeedTheme.primaryColor.withValues(
+                          alpha: 0.3,
+                        ),
                         blurRadius: 16,
                         spreadRadius: 2,
                       ),
@@ -121,9 +119,8 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                                 size: 40,
                               ),
                             ),
-                            placeholder: (_, __) => Container(
-                              color: NullFeedTheme.cardColor,
-                            ),
+                            placeholder: (_, __) =>
+                                Container(color: NullFeedTheme.cardColor),
                           )
                         else
                           Container(
@@ -161,7 +158,8 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                           ),
 
                         // Offline badge
-                        if (ref.watch(offlineStatusProvider(widget.video.id)) == 'complete')
+                        if (ref.watch(offlineStatusProvider(widget.video.id)) ==
+                            'complete')
                           Positioned(
                             left: 6,
                             bottom: 6,

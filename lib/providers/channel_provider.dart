@@ -3,18 +3,14 @@ import '../models/channel.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
 
-final channelsProvider =
-    StateNotifierProvider<ChannelsNotifier, AsyncValue<List<Channel>>>((ref) {
-  final api = ref.watch(apiServiceProvider);
-  return ChannelsNotifier(api);
-});
-
-class ChannelsNotifier extends StateNotifier<AsyncValue<List<Channel>>> {
-  final ApiService _api;
-
-  ChannelsNotifier(this._api) : super(const AsyncValue.loading()) {
+class ChannelsNotifier extends Notifier<AsyncValue<List<Channel>>> {
+  @override
+  AsyncValue<List<Channel>> build() {
     load();
+    return const AsyncValue.loading();
   }
+
+  ApiService get _api => ref.read(apiServiceProvider);
 
   Future<void> load() async {
     state = const AsyncValue.loading();
@@ -26,7 +22,10 @@ class ChannelsNotifier extends StateNotifier<AsyncValue<List<Channel>>> {
     }
   }
 
-  Future<void> subscribe(String youtubeUrl, {String trackingMode = 'FUTURE_ONLY'}) async {
+  Future<void> subscribe(
+    String youtubeUrl, {
+    String trackingMode = 'FUTURE_ONLY',
+  }) async {
     try {
       await _api.subscribeToChannel(youtubeUrl, trackingMode: trackingMode);
       await load();
@@ -45,14 +44,23 @@ class ChannelsNotifier extends StateNotifier<AsyncValue<List<Channel>>> {
   }
 }
 
-final channelDetailProvider =
-    FutureProvider.family<Channel, String>((ref, channelId) async {
+final channelsProvider =
+    NotifierProvider<ChannelsNotifier, AsyncValue<List<Channel>>>(
+      ChannelsNotifier.new,
+    );
+
+final channelDetailProvider = FutureProvider.family<Channel, String>((
+  ref,
+  channelId,
+) async {
   final api = ref.watch(apiServiceProvider);
   return api.getChannel(channelId);
 });
 
-final channelVideosProvider =
-    FutureProvider.family<List<Video>, String>((ref, channelId) async {
+final channelVideosProvider = FutureProvider.family<List<Video>, String>((
+  ref,
+  channelId,
+) async {
   final api = ref.watch(apiServiceProvider);
   return api.getChannelVideos(channelId);
 });

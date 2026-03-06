@@ -69,7 +69,9 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                 ),
                 InkWell(
                   onTap: () {
-                    ref.read(offlineServiceProvider).cancelDownload(widget.video.id);
+                    ref
+                        .read(offlineServiceProvider)
+                        .cancelDownload(widget.video.id);
                     ref.read(offlineVideosProvider.notifier).refresh();
                   },
                   borderRadius: BorderRadius.circular(18),
@@ -142,10 +144,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
         );
       case VideoStatus.failed:
         return IconButton(
-          icon: const Icon(
-            Icons.refresh,
-            color: NullFeedTheme.errorColor,
-          ),
+          icon: const Icon(Icons.refresh, color: NullFeedTheme.errorColor),
           onPressed: widget.onDownload,
           tooltip: 'Retry download',
         );
@@ -186,8 +185,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
             onTap: isTappable ? widget.onTap : null,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   // Thumbnail
@@ -279,8 +277,9 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                           children: [
                             if (widget.video.uploadedAt != null)
                               Text(
-                                DateFormat.yMMMd()
-                                    .format(widget.video.uploadedAt!),
+                                DateFormat.yMMMd().format(
+                                  widget.video.uploadedAt!,
+                                ),
                                 style: const TextStyle(
                                   color: NullFeedTheme.textMuted,
                                   fontSize: 12,

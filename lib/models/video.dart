@@ -17,7 +17,7 @@ enum VideoStatus {
 }
 
 @freezed
-class Video with _$Video {
+abstract class Video with _$Video {
   const factory Video({
     required String id,
     @JsonKey(name: 'youtube_video_id') required String youtubeVideoId,
@@ -30,7 +30,9 @@ class Video with _$Video {
     @Default(VideoStatus.cataloged) VideoStatus status,
     @JsonKey(name: 'metadata_json') Map<String, dynamic>? metadataJson,
     // Joined fields from UserVideoRef
-    @JsonKey(name: 'watch_position_seconds') @Default(0) int watchPositionSeconds,
+    @JsonKey(name: 'watch_position_seconds')
+    @Default(0)
+    int watchPositionSeconds,
     @JsonKey(name: 'is_watched') @Default(false) bool isWatched,
     // Preview
     @JsonKey(name: 'preview_status') String? previewStatus,
@@ -42,11 +44,13 @@ class Video with _$Video {
 }
 
 extension VideoExtensions on Video {
-  bool get isPlayable => status == VideoStatus.complete || previewStatus == 'READY';
+  bool get isPlayable =>
+      status == VideoStatus.complete || previewStatus == 'READY';
 
   bool get hasPreviewReady => previewStatus == 'READY';
 
-  bool get isPreviewOnly => previewStatus == 'READY' && status != VideoStatus.complete;
+  bool get isPreviewOnly =>
+      previewStatus == 'READY' && status != VideoStatus.complete;
 
   bool get isDownloadable =>
       status == VideoStatus.cataloged || status == VideoStatus.failed;
@@ -64,8 +68,8 @@ extension VideoExtensions on Video {
     final minutes = (durationSeconds % 3600) ~/ 60;
     final seconds = durationSeconds % 60;
     if (hours > 0) {
-      return '${hours}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
-    return '${minutes}:${seconds.toString().padLeft(2, '0')}';
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }

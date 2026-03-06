@@ -33,13 +33,15 @@ class AuthState {
   }
 }
 
-class AuthNotifier extends StateNotifier<AuthState> {
-  final ApiService _api;
-  final StorageService _storage;
-
-  AuthNotifier(this._api, this._storage) : super(const AuthState()) {
+class AuthNotifier extends Notifier<AuthState> {
+  @override
+  AuthState build() {
     _restoreSession();
+    return const AuthState();
   }
+
+  ApiService get _api => ref.read(apiServiceProvider);
+  StorageService get _storage => ref.read(storageServiceProvider);
 
   Future<void> _restoreSession() async {
     final userId = _storage.getSelectedUserId();
@@ -123,9 +125,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
-final authStateProvider =
-    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final api = ref.watch(apiServiceProvider);
-  final storage = ref.watch(storageServiceProvider);
-  return AuthNotifier(api, storage);
-});
+final authStateProvider = NotifierProvider<AuthNotifier, AuthState>(
+  AuthNotifier.new,
+);

@@ -2,19 +2,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/recommendation.dart';
 import '../services/api_service.dart';
 
-final discoverProvider = StateNotifierProvider<DiscoverNotifier,
-    AsyncValue<List<Recommendation>>>((ref) {
-  final api = ref.watch(apiServiceProvider);
-  return DiscoverNotifier(api);
-});
-
-class DiscoverNotifier
-    extends StateNotifier<AsyncValue<List<Recommendation>>> {
-  final ApiService _api;
-
-  DiscoverNotifier(this._api) : super(const AsyncValue.loading()) {
+class DiscoverNotifier extends Notifier<AsyncValue<List<Recommendation>>> {
+  @override
+  AsyncValue<List<Recommendation>> build() {
     load();
+    return const AsyncValue.loading();
   }
+
+  ApiService get _api => ref.read(apiServiceProvider);
 
   Future<void> load() async {
     state = const AsyncValue.loading();
@@ -30,9 +25,7 @@ class DiscoverNotifier
     try {
       await _api.dismissRecommendation(id);
       state.whenData((recs) {
-        state = AsyncValue.data(
-          recs.where((r) => r.id != id).toList(),
-        );
+        state = AsyncValue.data(recs.where((r) => r.id != id).toList());
       });
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -50,3 +43,8 @@ class DiscoverNotifier
     }
   }
 }
+
+final discoverProvider =
+    NotifierProvider<DiscoverNotifier, AsyncValue<List<Recommendation>>>(
+      DiscoverNotifier.new,
+    );

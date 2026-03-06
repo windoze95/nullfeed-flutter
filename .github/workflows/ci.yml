@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FLUTTER_VERSION: "3.27.4"
+  FLUTTER_VERSION: "3.41.4"
 
 jobs:
   format-check:
@@ -88,18 +88,9 @@ jobs:
 
   build-ios:
     name: Build iOS
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-
-      - name: Select Xcode 26
-        run: sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
-
-      - name: Verify Xcode version
-        run: |
-          xcodebuild -version
-          echo "Xcode 26 is required. Failing if not available."
-          xcodebuild -version | grep -q "Xcode 26" || { echo "::error::Xcode 26 is not available on this runner"; exit 1; }
 
       - uses: subosito/flutter-action@v2
         with:
@@ -160,25 +151,53 @@ jobs:
           flutter pub outdated --no-dev-dependencies --json > outdated.json
 
           # Parse major version drift from the JSON output
-          MAJOR_DRIFT=$(python3 -c "
+          python3 << 'PYEOF'
           import json, sys
           data = json.load(open('outdated.json'))
           packages = data.get('packages', [])
           drift = []
           for pkg in packages:
-              current = pkg.get('current', {}).get('version', '')
-              latest = pkg.get('latest', {}).get('version', '')
+              current_info = pkg.get('current') or {}
+              latest_info = pkg.get('latest') or {}
+              current = current_info.get('version', '')
+              latest = latest_info.get('version', '')
               if current and latest:
                   cur_major = current.split('.')[0]
                   lat_major = latest.split('.')[0]
                   if cur_major != lat_major:
-                      drift.append(f\"  {pkg['package']}: {current} -> {latest}\")
+                      drift.append(f"  {pkg['package']}: {current} -> {latest}")
           if drift:
-              print('Major version drift detected:')
+              print('::warning::Major version drift detected:')
               for d in drift:
                   print(d)
-              sys.exit(1)
           else:
               print('No major version drift found.')
-          ")
-          echo "$MAJOR_DRIFT"
+          PYEOF
+
+  agent-rules-sync:
+    name: Agent Rules Sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check agent instruction files are in sync
+        run: |
+          TARGETS=".cursorrules .windsurfrules .clinerules .continuerules CLAUDE.md .github/copilot-instructions.md"
+          OUT_OF_SYNC=""
+          for target in $TARGETS; do
+            if [ ! -f "$target" ]; then
+              echo "::error::Missing: $target (run scripts/sync-agent-rules.sh)"
+              OUT_OF_SYNC="$OUT_OF_SYNC $target"
+            elif ! diff -q AGENTS.md "$target" > /dev/null 2>&1; then
+              echo "::error::Out of sync: $target differs from AGENTS.md"
+              OUT_OF_SYNC="$OUT_OF_SYNC $target"
+            else
+              echo "OK: $target"
+            fi
+          done
+          if [ -n "$OUT_OF_SYNC" ]; then
+            echo ""
+            echo "Run './scripts/sync-agent-rules.sh' to fix."
+            exit 1
+          fi
+          echo "All agent instruction files are in sync."

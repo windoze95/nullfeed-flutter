@@ -25,8 +25,7 @@ class NullFeedProgressBar extends StatelessWidget {
         height: height,
         child: LinearProgressIndicator(
           value: progress.clamp(0.0, 1.0),
-          backgroundColor:
-              backgroundColor ?? NullFeedTheme.progressBackground,
+          backgroundColor: backgroundColor ?? NullFeedTheme.progressBackground,
           valueColor: AlwaysStoppedAnimation<Color>(
             foregroundColor ?? NullFeedTheme.progressForeground,
           ),
@@ -39,16 +38,20 @@ class NullFeedProgressBar extends StatelessWidget {
         onTapDown: (details) {
           final box = context.findRenderObject() as RenderBox?;
           if (box != null) {
-            final fraction =
-                (details.localPosition.dx / box.size.width).clamp(0.0, 1.0);
+            final fraction = (details.localPosition.dx / box.size.width).clamp(
+              0.0,
+              1.0,
+            );
             onSeek!(fraction);
           }
         },
         onHorizontalDragUpdate: (details) {
           final box = context.findRenderObject() as RenderBox?;
           if (box != null) {
-            final fraction =
-                (details.localPosition.dx / box.size.width).clamp(0.0, 1.0);
+            final fraction = (details.localPosition.dx / box.size.width).clamp(
+              0.0,
+              1.0,
+            );
             onSeek!(fraction);
           }
         },
