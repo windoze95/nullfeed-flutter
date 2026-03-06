@@ -27,6 +27,39 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   final Set<String> _pendingVideoIds = {};
 
   @override
+  void initState() {
+    super.initState();
+    _refreshChannelImages();
+  }
+
+  Future<void> _refreshChannelImages() async {
+    try {
+      // Snapshot current URLs before refresh
+      final oldChannel = ref
+          .read(channelDetailProvider(widget.channelId))
+          .value;
+      final oldBanner = oldChannel?.bannerUrl;
+      final oldAvatar = oldChannel?.avatarUrl;
+
+      final api = ref.read(apiServiceProvider);
+      final updated = await api.refreshChannelImages(widget.channelId);
+
+      // Evict stale images from cache if URLs changed
+      if (oldBanner != null && oldBanner != updated.bannerUrl) {
+        CachedNetworkImage.evictFromCache(oldBanner);
+      }
+      if (oldAvatar != null && oldAvatar != updated.avatarUrl) {
+        CachedNetworkImage.evictFromCache(oldAvatar);
+      }
+
+      ref.invalidate(channelDetailProvider(widget.channelId));
+      ref.invalidate(channelsProvider);
+    } catch (_) {
+      // Non-critical — channel still loads with cached images
+    }
+  }
+
+  @override
   void dispose() {
     _pollTimer?.cancel();
     super.dispose();

@@ -33,6 +33,8 @@ class AppConstants {
 
   static String channelDetail(String id) => '$apiBase/channels/$id';
   static String channelVideos(String id) => '$apiBase/channels/$id/videos';
+  static String channelRefreshImages(String id) =>
+      '$apiBase/channels/$id/refresh-images';
   static String channelUnsubscribe(String id) =>
       '$apiBase/channels/$id/unsubscribe';
   static String videoDetail(String id) => '$apiBase/videos/$id';
