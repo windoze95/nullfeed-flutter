@@ -2,13 +2,13 @@
 
 **A Self-Hosted YouTube Media Center -- iOS & tvOS App**
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.27+-02569B.svg)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.6+-0175C2.svg)](https://dart.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-3.41+-02569B.svg)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.11+-0175C2.svg)](https://dart.dev)
 [![iOS 17+](https://img.shields.io/badge/iOS-17%2B-000000.svg)](https://developer.apple.com/ios/)
 [![tvOS 17+](https://img.shields.io/badge/tvOS-17%2B-000000.svg)](https://developer.apple.com/tvos/)
-[![License: Private](https://img.shields.io/badge/license-private-red.svg)](#license)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-NullFeed is a self-hosted YouTube media center that delivers a **streaming-service-quality** browsing and playback experience for your personal YouTube library. The Flutter app targets **iOS** and **tvOS**, connecting to the [NullFeed backend](https://github.com/nullfeed/nullfeed-backend) running on Docker (Unraid or any Docker host).
+NullFeed is a self-hosted YouTube media center that delivers a **streaming-service-quality** browsing and playback experience for your personal YouTube library. The Flutter app targets **iOS** and **tvOS**, connecting to the [NullFeed backend](https://github.com/windoze95/nullfeed-backend) running on Docker (Unraid or any Docker host).
 
 Think Netflix, but for your YouTube subscriptions -- channel-centric navigation, resume-aware playback, multi-user profiles, and AI-powered discovery.
 
@@ -44,10 +44,10 @@ _Coming soon._
 
 ## Prerequisites
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.27+ (stable channel)
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.41+ (stable channel)
 - [Xcode 26](https://developer.apple.com/xcode/) with iOS and tvOS SDKs
 - [CocoaPods](https://cocoapods.org/) (installed via `gem install cocoapods` or bundled with Xcode)
-- A running [NullFeed backend](https://github.com/nullfeed/nullfeed-backend) instance
+- A running [NullFeed backend](https://github.com/windoze95/nullfeed-backend) instance
 - iOS 17+ device or simulator / tvOS 17+ Apple TV or simulator
 
 ---
@@ -57,7 +57,7 @@ _Coming soon._
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/nullfeed/nullfeed-flutter.git
+   git clone https://github.com/windoze95/nullfeed-flutter.git
    cd nullfeed-flutter
    ```
 
@@ -115,15 +115,15 @@ nullfeed-flutter/
 │   │   ├── auth_provider.dart              # Authentication and profile state
 │   │   ├── channel_provider.dart           # Channel data providers
 │   │   ├── discover_provider.dart          # AI recommendations provider
-│   │   ├── download_provider.dart          # Download queue and progress
+│   │   ├── download_progress_provider.dart # Download queue and progress
 │   │   ├── feed_provider.dart              # Home feed data providers
+│   │   ├── offline_provider.dart           # Offline mode state management
 │   │   ├── settings_provider.dart          # App settings and preferences
 │   │   ├── video_provider.dart             # Video metadata and playback
 │   │   └── websocket_provider.dart         # WebSocket connection management
 │   ├── screens/
 │   │   ├── channel_detail_screen.dart      # Channel page with video list
 │   │   ├── discover_screen.dart            # AI-powered suggestions
-│   │   ├── downloads_screen.dart           # Download queue and status
 │   │   ├── home_screen.dart                # Resume-aware home feed
 │   │   ├── library_screen.dart             # All subscribed channels
 │   │   ├── profile_picker_screen.dart      # Multi-user profile selection
@@ -131,13 +131,13 @@ nullfeed-flutter/
 │   │   └── video_player_screen.dart        # Full-screen video player
 │   ├── services/
 │   │   ├── api_service.dart                # Dio HTTP client and API methods
+│   │   ├── offline_service.dart            # Offline data persistence
 │   │   ├── storage_service.dart            # Hive local storage
 │   │   └── websocket_service.dart          # WebSocket client
 │   └── widgets/
 │       ├── adaptive_layout.dart            # iOS/tvOS adaptive layout wrapper
 │       ├── channel_card.dart               # Channel artwork card
 │       ├── content_row.dart                # Horizontal scrolling content row
-│       ├── download_progress_indicator.dart # Download progress UI
 │       ├── focus_wrapper.dart              # tvOS focus engine wrapper
 │       ├── progress_bar.dart               # Video watch progress bar
 │       ├── video_card.dart                 # Video thumbnail card
@@ -251,37 +251,17 @@ After connecting, select or create a user profile to begin using the app.
 
 ---
 
-## Dependencies
+## Related Repositories
 
-### Runtime
-
-| Package                | Version  | Purpose                              |
-|------------------------|----------|--------------------------------------|
-| `flutter_riverpod`     | ^2.6.1   | State management                     |
-| `riverpod_annotation`  | ^2.6.1   | Riverpod code generation annotations |
-| `dio`                  | ^5.7.0   | HTTP client                          |
-| `video_player`         | ^2.9.2   | Native video playback (AVPlayer)     |
-| `hive` / `hive_flutter`| ^2.2.3  | Local key-value storage              |
-| `go_router`            | ^14.8.1  | Declarative routing                  |
-| `cached_network_image` | ^3.4.1   | Image caching and placeholders       |
-| `web_socket_channel`   | ^3.0.1   | WebSocket client                     |
-| `freezed_annotation`   | ^2.4.4   | Immutable model annotations          |
-| `json_annotation`      | ^4.9.0   | JSON serialization annotations       |
-| `intl`                 | ^0.19.0  | Date/number formatting               |
-| `shimmer`              | ^3.0.0   | Loading placeholder animations       |
-
-### Dev
-
-| Package                | Version  | Purpose                              |
-|------------------------|----------|--------------------------------------|
-| `flutter_lints`        | ^5.0.0   | Lint rules                           |
-| `build_runner`         | ^2.4.13  | Code generation runner               |
-| `freezed`              | ^2.5.7   | Immutable model code generation      |
-| `json_serializable`    | ^6.9.0   | JSON serialization code generation   |
-| `riverpod_generator`   | ^2.6.2   | Riverpod provider code generation    |
+| Repository | Description |
+|------------|-------------|
+| [nullfeed-backend](https://github.com/windoze95/nullfeed-backend) | Python/FastAPI backend -- Docker-based server with yt-dlp, Celery, Redis, and SQLite |
+| **nullfeed-flutter** (this repo) | **Flutter client for iOS** |
+| [nullfeed-tvos](https://github.com/windoze95/nullfeed-tvos) | Native Swift/SwiftUI tvOS app |
+| [nullfeed-demo](https://github.com/windoze95/nullfeed-demo) | FastAPI demo server with Creative Commons content for App Store review |
 
 ---
 
 ## License
 
-Private -- All rights reserved.
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
