@@ -15,6 +15,7 @@ Think Netflix, but for your YouTube subscriptions -- channel-centric navigation,
 
 ## Features
 
+- **Instant Playback with Progressive Quality** -- Start watching immediately, even before a video finishes downloading to the server. The app begins playback with a low-quality stream, then seamlessly upgrades to the full-quality version once it's ready -- no buffering, no interruption.
 - **Channel-Centric Navigation** -- Browse your subscriptions like shows in a streaming app, with channel art, banners, and episode lists.
 - **Resume-Aware Home Screen** -- Continue Watching, New Episodes, and Recently Added rows keep you up to date.
 - **Native Video Playback** -- AVPlayer-backed playback with seeking and Picture-in-Picture.
