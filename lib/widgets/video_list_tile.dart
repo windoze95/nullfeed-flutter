@@ -100,7 +100,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
             );
             ref.read(offlineVideosProvider.notifier).refresh();
           },
-          tooltip: 'Save offline',
+          tooltip: 'Save for offline',
         );
       case VideoStatus.downloading:
       case VideoStatus.pending:
@@ -140,7 +140,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
             color: NullFeedTheme.primaryColor,
           ),
           onPressed: widget.onDownload,
-          tooltip: 'Download',
+          tooltip: 'Download to server',
         );
       case VideoStatus.failed:
         return IconButton(
