@@ -62,7 +62,7 @@ jobs:
         run: sudo gem install fastlane
 
       - name: Import signing certificate
-        uses: apple-actions/import-codesign-certs@v2
+        uses: apple-actions/import-codesign-certs@v6
         with:
           p12-file-base64: ${{ secrets.IOS_DIST_CERT_BASE64 }}
           p12-password: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
