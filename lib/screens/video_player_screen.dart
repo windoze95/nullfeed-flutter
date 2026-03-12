@@ -246,7 +246,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       });
 
       oldController?.pause();
-      oldController?.dispose();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldController?.dispose();
+      });
     } catch (e) {
       // HQ switch failed — keep playing preview (silent fallback)
       debugPrint('HQ switch failed, continuing preview: $e');
