@@ -107,14 +107,12 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - name: Cache pub dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            .dart_tool
-          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
-          restore-keys: pub-${{ runner.os }}-
+      # NOTE: deliberately no pub/.dart_tool cache for the iOS build.
+      # A restored .dart_tool carries stale native-assets fingerprints,
+      # which makes `flutter build ios` skip building FFI packages
+      # (objective_c) and fail with "native assets specification references
+      # objective_c, which was not found in build/native_assets/ios".
+      # Reproduced 2026-06-11: every cold build passed, every warm one failed.
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
