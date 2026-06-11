@@ -1,19 +1,20 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:nullfeed/app.dart';
-import 'package:nullfeed/config/constants.dart';
+
+import 'helpers/test_helpers.dart';
 
 void main() {
+  late Directory hiveDir;
+
   setUp(() async {
-    Hive.init('/tmp/hive_test');
-    await Hive.openBox(AppConstants.settingsBox);
-    await Hive.openBox(AppConstants.sessionBox);
-    await Hive.openBox(AppConstants.offlineBox);
+    hiveDir = await setUpTestHive();
   });
 
   tearDown(() async {
-    await Hive.close();
+    await tearDownTestHive(hiveDir);
   });
 
   testWidgets('NullFeedApp renders without errors', (tester) async {

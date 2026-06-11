@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'json_converters.dart';
 
 part 'video.freezed.dart';
 part 'video.g.dart';
@@ -24,7 +25,8 @@ abstract class Video with _$Video {
     @JsonKey(name: 'channel_id') required String channelId,
     required String title,
     @JsonKey(name: 'duration_seconds') @Default(0) int durationSeconds,
-    @JsonKey(name: 'uploaded_at') DateTime? uploadedAt,
+    @JsonKey(name: 'uploaded_at', fromJson: nullableDateTimeFromJson)
+    DateTime? uploadedAt,
     @JsonKey(name: 'file_path') String? filePath,
     @JsonKey(name: 'file_size_bytes') int? fileSizeBytes,
     @Default(VideoStatus.cataloged) VideoStatus status,
@@ -34,6 +36,8 @@ abstract class Video with _$Video {
     @Default(0)
     int watchPositionSeconds,
     @JsonKey(name: 'is_watched') @Default(false) bool isWatched,
+    @JsonKey(name: 'last_watched_at', fromJson: nullableDateTimeFromJson)
+    DateTime? lastWatchedAt,
     // Preview
     @JsonKey(name: 'preview_status') String? previewStatus,
     // Joined from channel

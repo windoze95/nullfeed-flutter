@@ -17,6 +17,14 @@ final recentlyAddedProvider = FutureProvider<List<FeedItem>>((ref) async {
   return api.getRecentlyAdded();
 });
 
+/// Refreshes the three home-feed rows. Call after returning from the player
+/// (any entry point) — watch positions have likely changed.
+void invalidateFeedProviders(WidgetRef ref) {
+  ref.invalidate(continueWatchingProvider);
+  ref.invalidate(newEpisodesProvider);
+  ref.invalidate(recentlyAddedProvider);
+}
+
 final homeFeedProvider = FutureProvider<HomeFeed>((ref) async {
   final continueWatching = await ref.watch(continueWatchingProvider.future);
   final newEpisodes = await ref.watch(newEpisodesProvider.future);

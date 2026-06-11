@@ -1,50 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/recommendation.dart';
 import '../providers/discover_provider.dart';
 import '../providers/channel_provider.dart';
 import '../config/theme.dart';
+import '../services/api_service.dart';
 import '../widgets/adaptive_layout.dart';
 
 class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
 
+  /// Subscribes to a recommended channel; the recommendation is dismissed
+  /// only after the subscribe succeeds, and failures surface via SnackBar.
+  Future<void> _subscribe(
+    BuildContext context,
+    WidgetRef ref,
+    Recommendation rec,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(channelsProvider.notifier)
+          .subscribe(rec.youtubeChannelId!);
+      await ref.read(discoverProvider.notifier).dismiss(rec.id);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Subscribed to ${rec.channelName}')),
+      );
+    } on ApiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not subscribe: ${e.message}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recommendations = ref.watch(discoverProvider);
-    final isTv = AdaptiveLayout.isTv(context);
     final padding = AdaptiveLayout.contentPadding(context);
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          if (!isTv)
-            SliverAppBar(
-              floating: true,
-              title: const Text('Discover'),
-              backgroundColor: NullFeedTheme.backgroundColor,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () =>
-                      ref.read(discoverProvider.notifier).refresh(),
-                ),
-              ],
-            )
-          else
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _TVRefreshButton(
-                      onSelect: () =>
-                          ref.read(discoverProvider.notifier).refresh(),
-                    ),
-                  ],
-                ),
+          SliverAppBar(
+            floating: true,
+            title: const Text('Discover'),
+            backgroundColor: NullFeedTheme.backgroundColor,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => ref.read(discoverProvider.notifier).refresh(),
               ),
-            ),
+            ],
+          ),
           recommendations.when(
             data: (recs) {
               if (recs.isEmpty) {
@@ -95,14 +102,7 @@ class DiscoverScreen extends ConsumerWidget {
                         onDismiss: () =>
                             ref.read(discoverProvider.notifier).dismiss(rec.id),
                         onSubscribe: rec.youtubeChannelId != null
-                            ? () {
-                                ref
-                                    .read(channelsProvider.notifier)
-                                    .subscribe(rec.youtubeChannelId!);
-                                ref
-                                    .read(discoverProvider.notifier)
-                                    .dismiss(rec.id);
-                              }
+                            ? () => _subscribe(context, ref, rec)
                             : null,
                       ),
                     );
@@ -244,70 +244,6 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// TV refresh button
-// ---------------------------------------------------------------------------
-
-class _TVRefreshButton extends StatefulWidget {
-  final VoidCallback onSelect;
-  const _TVRefreshButton({required this.onSelect});
-
-  @override
-  State<_TVRefreshButton> createState() => _TVRefreshButtonState();
-}
-
-class _TVRefreshButtonState extends State<_TVRefreshButton> {
-  bool _isFocused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      onFocusChange: (f) => setState(() => _isFocused = f),
-      child: GestureDetector(
-        onTap: widget.onSelect,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: _isFocused
-                ? NullFeedTheme.primaryColor.withValues(alpha: 0.2)
-                : NullFeedTheme.cardColor,
-            border: Border.all(
-              color: _isFocused
-                  ? NullFeedTheme.primaryColor
-                  : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.refresh,
-                color: _isFocused
-                    ? NullFeedTheme.primaryColor
-                    : NullFeedTheme.textSecondary,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Refresh',
-                style: TextStyle(
-                  color: _isFocused
-                      ? NullFeedTheme.primaryColor
-                      : NullFeedTheme.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
           ),
         ),
       ),

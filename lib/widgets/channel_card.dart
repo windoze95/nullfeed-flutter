@@ -8,7 +8,15 @@ class ChannelCard extends StatefulWidget {
   final Channel channel;
   final VoidCallback? onTap;
 
-  const ChannelCard({super.key, required this.channel, this.onTap});
+  /// Opens the channel actions menu (long-press or the ⋯ button).
+  final VoidCallback? onMenu;
+
+  const ChannelCard({
+    super.key,
+    required this.channel,
+    this.onTap,
+    this.onMenu,
+  });
 
   @override
   State<ChannelCard> createState() => _ChannelCardState();
@@ -38,6 +46,7 @@ class _ChannelCardState extends State<ChannelCard> {
         onExit: (_) => setState(() => _isHovered = false),
         child: GestureDetector(
           onTap: widget.onTap,
+          onLongPress: widget.onMenu,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             transform: _isHighlighted
@@ -105,6 +114,23 @@ class _ChannelCardState extends State<ChannelCard> {
                       ),
                     ),
                   ),
+
+                  // Actions menu button
+                  if (widget.onMenu != null)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: IconButton(
+                        icon: const Icon(Icons.more_vert, size: 20),
+                        color: Colors.white70,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black.withValues(alpha: 0.4),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: widget.onMenu,
+                        tooltip: 'Channel actions',
+                      ),
+                    ),
 
                   // Channel info
                   Positioned(

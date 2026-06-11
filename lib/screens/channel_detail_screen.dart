@@ -7,6 +7,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/video.dart';
 import '../providers/channel_provider.dart';
 import '../providers/download_progress_provider.dart';
+import '../providers/feed_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/video_list_tile.dart';
@@ -105,262 +107,440 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     }).toList();
   }
 
+  void _invalidateChannel() {
+    ref.invalidate(channelDetailProvider(widget.channelId));
+    ref.invalidate(channelVideosProvider(widget.channelId));
+  }
+
+  Future<void> _refresh() async {
+    try {
+      await Future.wait([
+        ref.refresh(channelDetailProvider(widget.channelId).future),
+        ref.refresh(channelVideosProvider(widget.channelId).future),
+      ]);
+    } catch (_) {
+      // Errors surface through the providers' error states.
+    }
+  }
+
+  /// Picks the video for the Resume/Play button:
+  /// 1. an in-progress video (position > 0 and not watched) — "Resume";
+  /// 2. else the newest unwatched video — "Play";
+  /// 3. else the newest complete video — "Play".
+  ({Video video, String label})? _resumeTarget(List<Video> videos) {
+    final complete = videos
+        .where((v) => v.status == VideoStatus.complete)
+        .toList();
+    if (complete.isEmpty) return null;
+
+    final inProgress = complete
+        .where((v) => v.watchPositionSeconds > 0 && !v.isWatched)
+        .toList();
+    if (inProgress.isNotEmpty) {
+      // Most-recently-watched first; entries without a timestamp sort last.
+      inProgress.sort((a, b) {
+        final aTime = a.lastWatchedAt;
+        final bTime = b.lastWatchedAt;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
+      return (video: inProgress.first, label: 'Resume');
+    }
+
+    int newestFirst(Video a, Video b) {
+      final aTime = a.uploadedAt;
+      final bTime = b.uploadedAt;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    }
+
+    final unwatched = complete.where((v) => !v.isWatched).toList()
+      ..sort(newestFirst);
+    if (unwatched.isNotEmpty) {
+      return (video: unwatched.first, label: 'Play');
+    }
+
+    final sorted = [...complete]..sort(newestFirst);
+    return (video: sorted.first, label: 'Play');
+  }
+
   @override
   Widget build(BuildContext context) {
     final channelAsync = ref.watch(channelDetailProvider(widget.channelId));
     final videosAsync = ref.watch(channelVideosProvider(widget.channelId));
     final progressMap = ref.watch(downloadProgressProvider);
-    final isTv = AdaptiveLayout.isTv(context);
     final padding = AdaptiveLayout.contentPadding(context);
 
     videosAsync.whenData(_checkPollingNeeded);
 
     return Scaffold(
+      // The loaded state brings its own SliverAppBar; loading/error states
+      // still need a back button.
+      appBar: channelAsync.hasValue && !channelAsync.hasError
+          ? null
+          : AppBar(backgroundColor: NullFeedTheme.backgroundColor),
       body: channelAsync.when(
-        data: (channel) => CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: isTv ? 280 : 220,
-              pinned: true,
-              backgroundColor: NullFeedTheme.surfaceColor,
-              leading: isTv ? const SizedBox.shrink() : null,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (channel.bannerUrl != null)
-                      CachedNetworkImage(
-                        imageUrl: channel.bannerUrl!,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) =>
-                            Container(color: NullFeedTheme.cardColor),
-                      )
-                    else
-                      Container(color: NullFeedTheme.cardColor),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            NullFeedTheme.backgroundColor.withValues(
-                              alpha: 0.9,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(padding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (channel.avatarUrl != null)
-                          CircleAvatar(
-                            radius: isTv ? 40 : 32,
-                            backgroundImage: CachedNetworkImageProvider(
-                              channel.avatarUrl!,
-                            ),
-                          )
-                        else
-                          CircleAvatar(
-                            radius: isTv ? 40 : 32,
-                            backgroundColor: NullFeedTheme.primaryColor
-                                .withValues(alpha: 0.2),
-                            child: Text(
-                              channel.name.isNotEmpty
-                                  ? channel.name[0].toUpperCase()
-                                  : '?',
-                              style: TextStyle(
-                                fontSize: isTv ? 34 : 28,
-                                fontWeight: FontWeight.bold,
-                                color: NullFeedTheme.primaryColor,
+        data: (channel) => RefreshIndicator(
+          color: NullFeedTheme.primaryColor,
+          onRefresh: _refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 220,
+                pinned: true,
+                backgroundColor: NullFeedTheme.surfaceColor,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (channel.bannerUrl != null)
+                        CachedNetworkImage(
+                          imageUrl: channel.bannerUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) =>
+                              Container(color: NullFeedTheme.cardColor),
+                        )
+                      else
+                        Container(color: NullFeedTheme.cardColor),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              NullFeedTheme.backgroundColor.withValues(
+                                alpha: 0.9,
                               ),
-                            ),
-                          ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                channel.name,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall,
-                              ),
-                              if (channel.description != null &&
-                                  channel.description!.isNotEmpty)
-                                Text(
-                                  channel.description!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    videosAsync.when(
-                      data: (videos) {
-                        final completeVideos = videos
-                            .where((v) => v.status == VideoStatus.complete)
-                            .toList();
-                        if (completeVideos.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        final firstUnwatched = completeVideos.where(
-                          (v) => !v.isWatched,
-                        );
-                        final resumeVideo = firstUnwatched.isNotEmpty
-                            ? firstUnwatched.first
-                            : completeVideos.first;
-                        final hasProgress =
-                            resumeVideo.watchPositionSeconds > 0;
-                        return SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              await context.push('/player/${resumeVideo.id}');
-                              ref.invalidate(
-                                channelVideosProvider(widget.channelId),
-                              );
-                            },
-                            icon: const Icon(Icons.play_arrow, size: 24),
-                            label: Text(hasProgress ? 'Resume' : 'Play Next'),
-                          ),
-                        );
-                      },
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
-                    ),
-                    if (channel.trackingMode == 'FUTURE_ONLY')
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Row(
-                          children: [
-                            Expanded(
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(padding),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (channel.avatarUrl != null)
+                            CircleAvatar(
+                              radius: 32,
+                              backgroundImage: CachedNetworkImageProvider(
+                                channel.avatarUrl!,
+                              ),
+                            )
+                          else
+                            CircleAvatar(
+                              radius: 32,
+                              backgroundColor: NullFeedTheme.primaryColor
+                                  .withValues(alpha: 0.2),
                               child: Text(
-                                'Auto-offline new episodes',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                                channel.name.isNotEmpty
+                                    ? channel.name[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: NullFeedTheme.primaryColor,
+                                ),
                               ),
                             ),
-                            Switch(
-                              value: ref
-                                  .read(storageServiceProvider)
-                                  .isAutoOfflineEnabled(widget.channelId),
-                              onChanged: (value) {
-                                ref
-                                    .read(storageServiceProvider)
-                                    .setAutoOffline(widget.channelId, value);
-                                setState(() {});
-                              },
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  channel.name,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall,
+                                ),
+                                if (channel.description != null &&
+                                    channel.description!.isNotEmpty)
+                                  Text(
+                                    channel.description!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Videos',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                      const SizedBox(height: 16),
+                      videosAsync.when(
+                        data: (videos) {
+                          final target = _resumeTarget(videos);
+                          if (target == null) return const SizedBox.shrink();
+                          return SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                await context.push(
+                                  '/player/${target.video.id}',
+                                );
+                                if (!mounted) return;
+                                ref.invalidate(
+                                  channelVideosProvider(widget.channelId),
+                                );
+                                invalidateFeedProviders(ref);
+                              },
+                              icon: const Icon(Icons.play_arrow, size: 24),
+                              label: Text(target.label),
+                            ),
+                          );
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
+                      if (channel.trackingMode == 'FUTURE_ONLY')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Auto-offline new episodes',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                              Switch(
+                                value: ref
+                                    .read(storageServiceProvider)
+                                    .isAutoOfflineEnabled(widget.channelId),
+                                onChanged: (value) async {
+                                  await ref
+                                      .read(storageServiceProvider)
+                                      .setAutoOffline(widget.channelId, value);
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Videos',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            videosAsync.when(
-              data: (videos) {
-                final displayVideos = _applyOptimisticUpdates(videos);
-                if (displayVideos.isEmpty) {
-                  return SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.all(padding),
-                      child: Center(
-                        child: Text(
-                          'No videos found',
-                          style: Theme.of(context).textTheme.bodyMedium,
+              videosAsync.when(
+                data: (videos) {
+                  final displayVideos = _applyOptimisticUpdates(videos);
+                  if (displayVideos.isEmpty) {
+                    return SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(padding),
+                        child: Center(
+                          child: Text(
+                            'No videos found',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final video = displayVideos[index];
-                    return VideoListTile(
-                      video: video,
-                      downloadProgress: progressMap[video.id],
-                      onTap: (video.isPlayable || video.isInProgress)
-                          ? () async {
-                              await context.push('/player/${video.id}');
-                              ref.invalidate(
-                                channelVideosProvider(widget.channelId),
-                              );
-                            }
-                          : null,
-                      onDownload: video.isDownloadable
-                          ? () => _onDownload(video)
-                          : null,
-                      onCancel: video.isInProgress
-                          ? () => _onCancelDownload(video)
-                          : null,
                     );
-                  }, childCount: displayVideos.length),
-                );
-              },
-              loading: () => const SliverToBoxAdapter(
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-              ),
-              error: (error, _) => SliverToBoxAdapter(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      'Failed to load videos',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                  }
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final video = displayVideos[index];
+                      return VideoListTile(
+                        video: video,
+                        downloadProgress: progressMap[video.id],
+                        onTap: (video.isPlayable || video.isInProgress)
+                            ? () async {
+                                await context.push('/player/${video.id}');
+                                if (!mounted) return;
+                                ref.invalidate(
+                                  channelVideosProvider(widget.channelId),
+                                );
+                                invalidateFeedProviders(ref);
+                              }
+                            : null,
+                        onDownload: video.isDownloadable
+                            ? () => _onDownload(video)
+                            : null,
+                        onCancel: video.isInProgress
+                            ? () => _onCancelDownload(video)
+                            : null,
+                        onMenu: () => _showVideoMenu(video),
+                      );
+                    }, childCount: displayVideos.length),
+                  );
+                },
+                loading: () => const SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 48,
-                color: NullFeedTheme.errorColor,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Failed to load channel',
-                style: Theme.of(context).textTheme.titleMedium,
+                error: (error, _) => SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Failed to load videos',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: () => ref.invalidate(
+                              channelVideosProvider(widget.channelId),
+                            ),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: NullFeedTheme.errorColor,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load channel',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$error',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: _invalidateChannel,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
+  }
+
+  void _showVideoMenu(Video video) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NullFeedTheme.cardColor,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                video.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: NullFeedTheme.textMuted),
+              ),
+            ),
+            if (video.status == VideoStatus.complete)
+              ListTile(
+                leading: const Icon(Icons.download_rounded),
+                title: const Text('Re-download'),
+                subtitle: const Text('Fetch the video from YouTube again'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _onDownload(video);
+                },
+              ),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_outline,
+                color: NullFeedTheme.errorColor,
+              ),
+              title: const Text('Remove from library'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _confirmRemove(video);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmRemove(Video video) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: NullFeedTheme.cardColor,
+        title: const Text('Remove from library?'),
+        content: Text(
+          '"${video.title}" will be removed from your library. The downloaded '
+          'file is deleted from the server once no other profile has it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Remove',
+              style: TextStyle(color: NullFeedTheme.errorColor),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref.read(apiServiceProvider).deleteVideo(video.id);
+      if (!mounted) return;
+      ref.invalidate(channelVideosProvider(widget.channelId));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Removed from library')));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _onCancelDownload(Video video) async {
@@ -368,10 +548,10 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     try {
       await api.cancelDownload(video.id);
       ref.invalidate(channelVideosProvider(widget.channelId));
-    } catch (e) {
+    } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to cancel download: $e')),
+          SnackBar(content: Text('Failed to cancel download: ${e.message}')),
         );
       }
     }
@@ -379,23 +559,24 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
 
   Future<void> _onDownload(Video video) async {
     final api = ref.read(apiServiceProvider);
+    final quality = ref.read(settingsProvider).preferredQuality;
 
     setState(() {
       _pendingVideoIds.add(video.id);
     });
 
     try {
-      await api.downloadVideo(video.id);
+      await api.downloadVideo(video.id, quality: quality);
+      if (!mounted) return;
       _startPolling();
-    } catch (e) {
+    } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _pendingVideoIds.remove(video.id);
       });
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to start download: $e')));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to start download: ${e.message}')),
+      );
     }
   }
 }

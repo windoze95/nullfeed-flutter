@@ -7,8 +7,8 @@ import 'config/constants.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
-  await Hive.openBox('settings');
-  await Hive.openBox('session');
+  await Hive.openBox(AppConstants.settingsBox);
+  await Hive.openBox(AppConstants.sessionBox);
   await Hive.openBox(AppConstants.offlineBox);
 
   runApp(const ProviderScope(child: NullFeedApp()));

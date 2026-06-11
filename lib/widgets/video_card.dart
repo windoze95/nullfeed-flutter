@@ -7,8 +7,8 @@ import '../models/video.dart';
 import '../models/channel.dart';
 import '../config/theme.dart';
 import '../config/constants.dart';
+import '../providers/feed_provider.dart';
 import '../providers/offline_provider.dart';
-import 'adaptive_layout.dart';
 import 'progress_bar.dart';
 
 class VideoCard extends ConsumerStatefulWidget {
@@ -40,9 +40,12 @@ class _VideoCardState extends ConsumerState<VideoCard> {
     return null;
   }
 
-  void _onActivate() {
+  Future<void> _onActivate() async {
     if (widget.showProgress) {
-      context.push('/player/${widget.video.id}');
+      await context.push('/player/${widget.video.id}');
+      // Watch positions likely changed — refresh the home feed rows.
+      if (!mounted) return;
+      invalidateFeedProviders(ref);
     } else if (widget.channel != null) {
       context.push('/channel/${widget.channel!.id}');
     }
@@ -50,10 +53,7 @@ class _VideoCardState extends ConsumerState<VideoCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isTv = AdaptiveLayout.isTv(context);
-    final cardWidth = isTv
-        ? AppConstants.tvVideoCardWidth
-        : AppConstants.videoCardWidth;
+    const cardWidth = AppConstants.videoCardWidth;
 
     return Focus(
       onFocusChange: (focused) => setState(() => _isFocused = focused),
