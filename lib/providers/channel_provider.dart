@@ -22,25 +22,21 @@ class ChannelsNotifier extends Notifier<AsyncValue<List<Channel>>> {
     }
   }
 
+  /// Subscribes and reloads. Throws on failure so callers surface the error
+  /// locally — a failed subscribe must not replace the loaded channel list
+  /// with an error state.
   Future<void> subscribe(
     String youtubeUrl, {
     String trackingMode = 'FUTURE_ONLY',
   }) async {
-    try {
-      await _api.subscribeToChannel(youtubeUrl, trackingMode: trackingMode);
-      await load();
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
-    }
+    await _api.subscribeToChannel(youtubeUrl, trackingMode: trackingMode);
+    await load();
   }
 
+  /// Unsubscribes and reloads. Throws on failure (see [subscribe]).
   Future<void> unsubscribe(String channelId) async {
-    try {
-      await _api.unsubscribeFromChannel(channelId);
-      await load();
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
-    }
+    await _api.unsubscribeFromChannel(channelId);
+    await load();
   }
 }
 

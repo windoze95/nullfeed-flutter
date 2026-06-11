@@ -45,9 +45,7 @@ class _VideoCardState extends ConsumerState<VideoCard> {
       await context.push('/player/${widget.video.id}');
       // Watch positions likely changed — refresh the home feed rows.
       if (!mounted) return;
-      ref.invalidate(continueWatchingProvider);
-      ref.invalidate(newEpisodesProvider);
-      ref.invalidate(recentlyAddedProvider);
+      invalidateFeedProviders(ref);
     } else if (widget.channel != null) {
       context.push('/channel/${widget.channel!.id}');
     }

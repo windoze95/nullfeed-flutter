@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/video.dart';
 import '../providers/download_progress_provider.dart';
+import '../providers/feed_provider.dart';
 import '../providers/offline_provider.dart';
 import '../services/api_service.dart';
 import '../services/offline_service.dart';
@@ -227,7 +228,11 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
                   return _DeviceDownloadTile(
                     entry: entry,
                     liveProgress: offlineProgress[videoId],
-                    onPlay: () => context.push('/player/$videoId'),
+                    onPlay: () async {
+                      await context.push('/player/$videoId');
+                      if (!mounted) return;
+                      invalidateFeedProviders(ref);
+                    },
                     onDelete: () => _deleteDeviceDownload(entry),
                     onRetry: () => _retryDeviceDownload(entry),
                     onCancel: () => _cancelDeviceDownload(videoId),

@@ -79,9 +79,13 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          final token = storage.getSessionToken();
-          if (token != null) {
-            options.headers['X-User-Token'] = token;
+          // Respect per-request token overrides (e.g. the picker's in-memory
+          // management token) — only fall back to the stored session.
+          if (!options.headers.containsKey('X-User-Token')) {
+            final token = storage.getSessionToken();
+            if (token != null) {
+              options.headers['X-User-Token'] = token;
+            }
           }
           handler.next(options);
         },
@@ -154,8 +158,11 @@ class ApiService {
     return User.fromJson(response.data as Map<String, dynamic>);
   });
 
-  Future<void> logout() => _guard(() async {
-    await _dio.post('$_baseUrl${AppConstants.authLogout}');
+  Future<void> logout({String? tokenOverride}) => _guard(() async {
+    await _dio.post(
+      '$_baseUrl${AppConstants.authLogout}',
+      options: _withToken(tokenOverride),
+    );
   });
 
   Future<User> updateProfile(
@@ -164,6 +171,7 @@ class ApiService {
     String? avatarUrl,
     String? pin,
     bool removePin = false,
+    String? tokenOverride,
   }) => _guard(() async {
     final response = await _dio.patch(
       '$_baseUrl${AppConstants.authProfile(userId)}',
@@ -173,13 +181,24 @@ class ApiService {
         if (pin != null) 'pin': pin,
         if (removePin) 'remove_pin': true,
       },
+      options: _withToken(tokenOverride),
     );
     return User.fromJson(response.data as Map<String, dynamic>);
   });
 
-  Future<void> deleteProfile(String userId) => _guard(() async {
-    await _dio.delete('$_baseUrl${AppConstants.authProfile(userId)}');
-  });
+  Future<void> deleteProfile(String userId, {String? tokenOverride}) =>
+      _guard(() async {
+        await _dio.delete(
+          '$_baseUrl${AppConstants.authProfile(userId)}',
+          options: _withToken(tokenOverride),
+        );
+      });
+
+  /// Per-request auth override used by pre-login profile management so the
+  /// temporary token never touches persistent storage.
+  Options? _withToken(String? tokenOverride) => tokenOverride == null
+      ? null
+      : Options(headers: {'X-User-Token': tokenOverride});
 
   // YouTube import
   Future<YoutubeProfile> resolveYoutubeHandle(String handle) =>

@@ -163,12 +163,14 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
 
   /// Obtains a session token for [profile] (prompting for its PIN when set)
   /// so edit/delete calls can authenticate without signing anyone in. The
-  /// token is stored for the API interceptor and must be released with
-  /// [_releaseManagementToken].
-  Future<bool> _acquireManagementToken(User profile) async {
+  /// token lives only in memory and is passed per-request — it never touches
+  /// the persistent session slot, so it cannot leak into the next launch or
+  /// clobber a kept-but-unvalidated restorable session.
+  Future<String?> _acquireManagementToken(User profile) async {
     final api = ref.read(apiServiceProvider);
     if (profile.hasPin) {
-      final pin = await showDialog<String>(
+      String? acquired;
+      await showDialog<String>(
         context: context,
         builder: (context) => PinEntryDialog(
           title: 'Enter PIN',
@@ -179,7 +181,7 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
           onSubmit: (pin) async {
             try {
               final result = await api.selectProfile(profile.id, pin: pin);
-              await api.storage.setSessionToken(result.token);
+              acquired = result.token;
               return null;
             } on ApiException catch (e) {
               return e.message;
@@ -187,27 +189,24 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
           },
         ),
       );
-      return pin != null;
+      return acquired;
     }
     try {
       final result = await api.selectProfile(profile.id);
-      await api.storage.setSessionToken(result.token);
-      return true;
+      return result.token;
     } on ApiException catch (e) {
       if (mounted) _showSnackBar(e.message);
-      return false;
+      return null;
     }
   }
 
-  Future<void> _releaseManagementToken() async {
-    final api = ref.read(apiServiceProvider);
+  Future<void> _releaseManagementToken(String token) async {
     try {
-      await api.logout();
+      await ref.read(apiServiceProvider).logout(tokenOverride: token);
     } catch (_) {
-      // Best-effort: the temporary session is cleared locally regardless.
+      // Best-effort: an unreleased token simply expires with the session
+      // table; nothing is persisted client-side.
     }
-    await api.storage.setSessionToken(null);
-    await api.storage.setSelectedUserId(null);
   }
 
   void _showProfileOptions(User profile) {
@@ -259,17 +258,21 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
   }
 
   Future<void> _editProfile(User profile) async {
-    final unlocked = await _acquireManagementToken(profile);
-    if (!unlocked || !mounted) return;
+    final token = await _acquireManagementToken(profile);
+    if (token == null || !mounted) {
+      if (token != null) await _releaseManagementToken(token);
+      return;
+    }
     try {
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         backgroundColor: NullFeedTheme.surfaceColor,
-        builder: (sheetContext) => _EditProfileSheet(profile: profile),
+        builder: (sheetContext) =>
+            _EditProfileSheet(profile: profile, managementToken: token),
       );
     } finally {
-      await _releaseManagementToken();
+      await _releaseManagementToken(token);
     }
   }
 
@@ -302,15 +305,20 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
         false;
     if (!confirmed || !mounted) return;
 
-    final unlocked = await _acquireManagementToken(profile);
-    if (!unlocked || !mounted) return;
+    final token = await _acquireManagementToken(profile);
+    if (token == null || !mounted) {
+      if (token != null) await _releaseManagementToken(token);
+      return;
+    }
     try {
-      await ref.read(authStateProvider.notifier).deleteProfile(profile.id);
+      await ref
+          .read(authStateProvider.notifier)
+          .deleteProfile(profile.id, tokenOverride: token);
       if (!mounted) return;
       final error = ref.read(authStateProvider).error;
       _showSnackBar(error ?? 'Deleted ${profile.displayName}');
     } finally {
-      await _releaseManagementToken();
+      await _releaseManagementToken(token);
     }
   }
 
@@ -749,8 +757,12 @@ class _AddProfileCard extends StatelessWidget {
 /// to already be stored (see [_ProfilePickerScreenState._editProfile]).
 class _EditProfileSheet extends ConsumerStatefulWidget {
   final User profile;
+  final String managementToken;
 
-  const _EditProfileSheet({required this.profile});
+  const _EditProfileSheet({
+    required this.profile,
+    required this.managementToken,
+  });
 
   @override
   ConsumerState<_EditProfileSheet> createState() => _EditProfileSheetState();
@@ -848,6 +860,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
       avatarUrl: _importedAvatarUrl,
       pin: pin.isEmpty ? null : pin,
       removePin: pin.isEmpty && _removePin,
+      tokenOverride: widget.managementToken,
     );
     if (!mounted) return;
     final error = ref.read(authStateProvider).error;

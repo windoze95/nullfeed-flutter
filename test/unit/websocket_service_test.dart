@@ -13,6 +13,9 @@ class _FakeChannel extends Fake implements WebSocketChannel {
   late final _FakeSink _sink = _FakeSink(this);
 
   @override
+  int? closeCode;
+
+  @override
   Stream<dynamic> get stream => controller.stream;
 
   @override
@@ -21,7 +24,10 @@ class _FakeChannel extends Fake implements WebSocketChannel {
   void emit(Map<String, dynamic> json) => controller.add(jsonEncode(json));
 
   /// Simulates the server dropping the connection.
-  void drop() => unawaited(controller.close());
+  void drop({int? code}) {
+    closeCode = code;
+    unawaited(controller.close());
+  }
 }
 
 class _FakeSink extends Fake implements WebSocketSink {
@@ -172,6 +178,23 @@ void main() {
 
       // First retry delay is 1s plus up to 250ms of jitter.
       await tester.pump(const Duration(milliseconds: 1300));
+      expect(factory.channels, hasLength(2));
+
+      service.dispose();
+    });
+
+    testWidgets('does not reconnect after a 4401 auth reject', (tester) async {
+      service.connect('http://h', 'u1', 't');
+      expect(factory.channels, hasLength(1));
+
+      // Server closes with the auth-reject code: same token can never work.
+      factory.channels.single.drop(code: 4401);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 35));
+      expect(factory.channels, hasLength(1));
+
+      // An explicit reconnect (e.g. with a fresh token) still works.
+      service.connect('http://h', 'u1', 't2');
       expect(factory.channels, hasLength(2));
 
       service.dispose();

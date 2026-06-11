@@ -15,6 +15,7 @@ final offlineServiceProvider = Provider<OfflineService>((ref) {
     onProgress: (videoId, progress) => ref
         .read(offlineProgressProvider.notifier)
         .setProgress(videoId, progress),
+    onListChanged: () => ref.read(offlineVideosProvider.notifier).refresh(),
   );
 });
 
@@ -25,10 +26,18 @@ class OfflineService {
   /// (download finished, failed, or was cancelled).
   final void Function(String videoId, double? progress)? onProgress;
 
+  /// Fired whenever the set of offline entries changes (download started,
+  /// finished, failed, cancelled) so list UIs can refresh immediately.
+  final void Function()? onListChanged;
+
   final Dio _dio = Dio();
   final Map<String, CancelToken> _cancelTokens = {};
 
-  OfflineService({required this.apiService, this.onProgress});
+  OfflineService({
+    required this.apiService,
+    this.onProgress,
+    this.onListChanged,
+  });
 
   Box get _box => Hive.box(AppConstants.offlineBox);
 
@@ -55,11 +64,15 @@ class OfflineService {
     String? title,
     String? youtubeVideoId,
   }) async {
+    // In-flight guard: a second tap must not start a concurrent download
+    // writing to the same file. Registered before the first await.
+    if (_cancelTokens.containsKey(videoId)) return;
+    final cancelToken = CancelToken();
+    _cancelTokens[videoId] = cancelToken;
+
     final dir = await _offlineDir;
     final localPath = '$dir/$videoId.mp4';
     final url = apiService.getVideoStreamUrl(videoId);
-    final cancelToken = CancelToken();
-    _cancelTokens[videoId] = cancelToken;
 
     await _box.put(videoId, {
       'video_id': videoId,
@@ -74,6 +87,7 @@ class OfflineService {
       'downloaded_at': DateTime.now().toIso8601String(),
     });
     onProgress?.call(videoId, 0.0);
+    onListChanged?.call();
 
     try {
       await _dio.download(
@@ -113,6 +127,7 @@ class OfflineService {
     } finally {
       _cancelTokens.remove(videoId);
       onProgress?.call(videoId, null);
+      onListChanged?.call();
     }
   }
 

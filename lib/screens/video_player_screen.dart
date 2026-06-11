@@ -30,6 +30,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   bool _isInitialized = false;
   bool _isPreviewMode = false;
   bool _isOfflinePlayback = false;
+  bool _startingPlayback = false;
+  bool _pendingHqSwitch = false;
   String? _error;
   late final ApiService _api;
   late final OfflineService _offline;
@@ -149,12 +151,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     Video video, {
     bool isPreview = false,
   }) async {
+    // A WS event and a poll tick can race to start playback; only the first
+    // caller proceeds (checked-and-set synchronously, before any await).
+    if (_startingPlayback || _isInitialized) return;
+    _startingPlayback = true;
+
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
 
     try {
       await controller.initialize();
     } catch (e) {
       controller.dispose();
+      _startingPlayback = false;
       if (mounted) {
         setState(() => _error = 'Failed to load video: $e');
       }
@@ -174,6 +182,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
     if (!mounted) {
       controller.dispose();
+      _startingPlayback = false;
       return;
     }
 
@@ -182,6 +191,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       _isInitialized = true;
       _isPreviewMode = isPreview;
     });
+    _startingPlayback = false;
+
+    // An HQ-ready event may have arrived while the preview was initializing.
+    if (isPreview && _pendingHqSwitch) {
+      _pendingHqSwitch = false;
+      unawaited(_switchToHq());
+    }
 
     _startProgressTimer();
     _scheduleHideControls();
@@ -275,7 +291,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   Future<void> _switchToHq() async {
-    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (_controller == null || !_controller!.value.isInitialized) {
+      // Preview is still initializing — queue the upgrade instead of
+      // dropping it (the WS subscription is already cancelled by now).
+      _pendingHqSwitch = true;
+      return;
+    }
 
     // Capture current position
     final currentPosition = _controller!.value.position;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
+import '../providers/websocket_provider.dart';
 import '../screens/profile_picker_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/library_screen.dart';
@@ -104,7 +105,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
-class _ScaffoldWithNav extends StatelessWidget {
+class _ScaffoldWithNav extends ConsumerWidget {
   final Widget child;
   const _ScaffoldWithNav({required this.child});
 
@@ -134,7 +135,11 @@ class _ScaffoldWithNav extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Keep the WebSocket connection alive on every tab (not just Home) so
+    // events keep flowing and a Settings-triggered invalidate reconnects
+    // immediately instead of waiting for the Home tab to be visited.
+    ref.watch(webSocketConnectionProvider);
     final selectedIndex = _calculateSelectedIndex(context);
 
     return Scaffold(

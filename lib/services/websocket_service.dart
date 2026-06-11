@@ -91,7 +91,15 @@ class WebSocketService {
           }
         },
         onError: (Object _) => _scheduleReconnect(),
-        onDone: _scheduleReconnect,
+        onDone: () {
+          // 4401 = server rejected the token; retrying with the same
+          // credentials can never succeed. Wait for the next connect().
+          if (_channel?.closeCode == 4401) {
+            disconnect();
+            return;
+          }
+          _scheduleReconnect();
+        },
       );
     } catch (_) {
       _scheduleReconnect();

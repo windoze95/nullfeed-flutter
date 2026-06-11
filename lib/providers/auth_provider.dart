@@ -65,8 +65,10 @@ class AuthNotifier extends Notifier<AuthState> {
       // Validate the stored session instead of re-selecting (which would
       // bypass PIN protection).
       final user = await _api.getMe();
+      if (_restoreSuperseded(token)) return;
       state = AuthState(profiles: state.profiles, currentUser: user);
     } on ApiException catch (e) {
+      if (_restoreSuperseded(token)) return;
       if (e.statusCode == 401) {
         // Session is gone server-side: clear it and show the picker.
         await _storage.setSelectedUserId(null);
@@ -77,9 +79,16 @@ class AuthNotifier extends Notifier<AuthState> {
         state = state.copyWith(isLoading: false, restoreFailed: true);
       }
     } catch (_) {
+      if (_restoreSuperseded(token)) return;
       state = state.copyWith(isLoading: false, restoreFailed: true);
     }
   }
+
+  /// True when the user signed in manually (or the stored token changed)
+  /// while the restore round-trip was in flight — a stale result must not
+  /// clobber the fresh session.
+  bool _restoreSuperseded(String token) =>
+      state.currentUser != null || _storage.getSessionToken() != token;
 
   /// Retries validating a stored session after [AuthState.restoreFailed].
   Future<void> retryRestore() => _restoreSession();
@@ -174,6 +183,7 @@ class AuthNotifier extends Notifier<AuthState> {
     String? avatarUrl,
     String? pin,
     bool removePin = false,
+    String? tokenOverride,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -183,6 +193,7 @@ class AuthNotifier extends Notifier<AuthState> {
         avatarUrl: avatarUrl,
         pin: pin,
         removePin: removePin,
+        tokenOverride: tokenOverride,
       );
       final profiles = [
         for (final profile in state.profiles)
@@ -203,10 +214,10 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
-  Future<void> deleteProfile(String userId) async {
+  Future<void> deleteProfile(String userId, {String? tokenOverride}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      await _api.deleteProfile(userId);
+      await _api.deleteProfile(userId, tokenOverride: tokenOverride);
       final profiles = state.profiles
           .where((profile) => profile.id != userId)
           .toList();

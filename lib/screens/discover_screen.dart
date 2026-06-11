@@ -1,12 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/recommendation.dart';
 import '../providers/discover_provider.dart';
 import '../providers/channel_provider.dart';
 import '../config/theme.dart';
+import '../services/api_service.dart';
 import '../widgets/adaptive_layout.dart';
 
 class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
+
+  /// Subscribes to a recommended channel; the recommendation is dismissed
+  /// only after the subscribe succeeds, and failures surface via SnackBar.
+  Future<void> _subscribe(
+    BuildContext context,
+    WidgetRef ref,
+    Recommendation rec,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(channelsProvider.notifier)
+          .subscribe(rec.youtubeChannelId!);
+      await ref.read(discoverProvider.notifier).dismiss(rec.id);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Subscribed to ${rec.channelName}')),
+      );
+    } on ApiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not subscribe: ${e.message}')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -77,14 +102,7 @@ class DiscoverScreen extends ConsumerWidget {
                         onDismiss: () =>
                             ref.read(discoverProvider.notifier).dismiss(rec.id),
                         onSubscribe: rec.youtubeChannelId != null
-                            ? () {
-                                ref
-                                    .read(channelsProvider.notifier)
-                                    .subscribe(rec.youtubeChannelId!);
-                                ref
-                                    .read(discoverProvider.notifier)
-                                    .dismiss(rec.id);
-                              }
+                            ? () => _subscribe(context, ref, rec)
                             : null,
                       ),
                     );

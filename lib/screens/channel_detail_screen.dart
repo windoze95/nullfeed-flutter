@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/video.dart';
 import '../providers/channel_provider.dart';
 import '../providers/download_progress_provider.dart';
+import '../providers/feed_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
@@ -136,6 +137,15 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
         .where((v) => v.watchPositionSeconds > 0 && !v.isWatched)
         .toList();
     if (inProgress.isNotEmpty) {
+      // Most-recently-watched first; entries without a timestamp sort last.
+      inProgress.sort((a, b) {
+        final aTime = a.lastWatchedAt;
+        final bTime = b.lastWatchedAt;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
       return (video: inProgress.first, label: 'Resume');
     }
 
@@ -284,9 +294,11 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                                 await context.push(
                                   '/player/${target.video.id}',
                                 );
+                                if (!mounted) return;
                                 ref.invalidate(
                                   channelVideosProvider(widget.channelId),
                                 );
+                                invalidateFeedProviders(ref);
                               },
                               icon: const Icon(Icons.play_arrow, size: 24),
                               label: Text(target.label),
@@ -356,9 +368,11 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                         onTap: (video.isPlayable || video.isInProgress)
                             ? () async {
                                 await context.push('/player/${video.id}');
+                                if (!mounted) return;
                                 ref.invalidate(
                                   channelVideosProvider(widget.channelId),
                                 );
+                                invalidateFeedProviders(ref);
                               }
                             : null,
                         onDownload: video.isDownloadable
@@ -553,16 +567,16 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
 
     try {
       await api.downloadVideo(video.id, quality: quality);
+      if (!mounted) return;
       _startPolling();
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _pendingVideoIds.remove(video.id);
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start download: ${e.message}')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to start download: ${e.message}')),
+      );
     }
   }
 }

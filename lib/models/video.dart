@@ -36,6 +36,8 @@ abstract class Video with _$Video {
     @Default(0)
     int watchPositionSeconds,
     @JsonKey(name: 'is_watched') @Default(false) bool isWatched,
+    @JsonKey(name: 'last_watched_at', fromJson: nullableDateTimeFromJson)
+    DateTime? lastWatchedAt,
     // Preview
     @JsonKey(name: 'preview_status') String? previewStatus,
     // Joined from channel
