@@ -19,7 +19,8 @@ If you need to update agent instructions, edit **this file** (`AGENTS.md`) and r
 ## Project Overview
 
 NullFeed is a self-hosted YouTube media center. This is the Flutter client
-targeting iOS and Apple TV.
+targeting iOS only (Apple TV is covered by the separate native tvOS app,
+`nullfeed-tvos`).
 
 **Stack:** Flutter 3.41+, Dart 3.11+, Riverpod 3.x, Freezed 3.x, GoRouter 17.x,
 Hive, Dio, video_player.
@@ -33,7 +34,7 @@ This repo has 6 CI checks that run on every PR:
 | **Format Check** | `dart format --set-exit-if-changed .` |
 | **Analyze** | `flutter analyze --fatal-infos --fatal-warnings` |
 | **Test** | `flutter test` |
-| **Build iOS** | `flutter build ios --release --no-codesign` (runs on `macos-26`) |
+| **Build iOS** | `flutter build ios --release --no-codesign` (runs on `macos-latest`) |
 | **Dependency Audit** | Warns on major version drift (non-blocking) |
 | **Agent Rules Sync** | Verifies all agent instruction files match `AGENTS.md` |
 

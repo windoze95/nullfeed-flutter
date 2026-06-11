@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'json_converters.dart';
 
 part 'channel.freezed.dart';
 part 'channel.g.dart';
@@ -13,7 +14,8 @@ abstract class Channel with _$Channel {
     String? description,
     @JsonKey(name: 'banner_url') String? bannerUrl,
     @JsonKey(name: 'avatar_url') String? avatarUrl,
-    @JsonKey(name: 'last_checked_at') DateTime? lastCheckedAt,
+    @JsonKey(name: 'last_checked_at', fromJson: nullableDateTimeFromJson)
+    DateTime? lastCheckedAt,
     @JsonKey(name: 'tracking_mode') String? trackingMode,
   }) = _Channel;
 

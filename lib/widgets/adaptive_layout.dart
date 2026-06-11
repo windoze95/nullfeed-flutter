@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum DeviceType { phone, tablet, tv }
+enum DeviceType { phone, tablet }
 
 class AdaptiveLayout extends StatelessWidget {
   final Widget Function(BuildContext context, DeviceType deviceType) builder;
@@ -11,16 +11,15 @@ class AdaptiveLayout extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     final shortestSide = size.shortestSide;
 
-    // tvOS or very large screens
-    if (shortestSide >= 900) return DeviceType.tv;
-    // iPad or tablet
+    // iPad or tablet (including very large screens)
     if (shortestSide >= 600) return DeviceType.tablet;
     // iPhone or phone
     return DeviceType.phone;
   }
 
-  static bool isTv(BuildContext context) =>
-      getDeviceType(context) == DeviceType.tv;
+  /// The Flutter app is iOS-only (the native tvOS app covers Apple TV).
+  /// Kept so existing call sites don't need churn.
+  static bool isTv(BuildContext context) => false;
 
   static bool isTablet(BuildContext context) =>
       getDeviceType(context) == DeviceType.tablet;
@@ -28,10 +27,9 @@ class AdaptiveLayout extends StatelessWidget {
   static bool isPhone(BuildContext context) =>
       getDeviceType(context) == DeviceType.phone;
 
-  /// Content padding — extra on TV for overscan safety
+  /// Content padding per device type
   static double contentPadding(BuildContext context) {
     return switch (getDeviceType(context)) {
-      DeviceType.tv => 60.0,
       DeviceType.tablet => 24.0,
       DeviceType.phone => 16.0,
     };
@@ -39,21 +37,14 @@ class AdaptiveLayout extends StatelessWidget {
 
   static int gridCrossAxisCount(BuildContext context) {
     return switch (getDeviceType(context)) {
-      DeviceType.tv => 5,
       DeviceType.tablet => 3,
       DeviceType.phone => 2,
     };
   }
 
   /// Adaptive value helper — pick per device type
-  static T value<T>(
-    BuildContext context, {
-    required T phone,
-    T? tablet,
-    required T tv,
-  }) {
+  static T value<T>(BuildContext context, {required T phone, T? tablet}) {
     return switch (getDeviceType(context)) {
-      DeviceType.tv => tv,
       DeviceType.tablet => tablet ?? phone,
       DeviceType.phone => phone,
     };

@@ -14,6 +14,9 @@ class VideoListTile extends ConsumerStatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onDownload;
   final VoidCallback? onCancel;
+
+  /// Opens the per-video actions menu (long-press or the ⋯ button).
+  final VoidCallback? onMenu;
   final double? downloadProgress;
 
   const VideoListTile({
@@ -22,6 +25,7 @@ class VideoListTile extends ConsumerStatefulWidget {
     this.onTap,
     this.onDownload,
     this.onCancel,
+    this.onMenu,
     this.downloadProgress,
   });
 
@@ -183,6 +187,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
           ),
           child: InkWell(
             onTap: isTappable ? widget.onTap : null,
+            onLongPress: widget.onMenu,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -300,6 +305,16 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                   ),
                   // Status-aware trailing widget
                   _buildTrailingWidget(),
+                  if (widget.onMenu != null)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.more_vert,
+                        color: NullFeedTheme.textMuted,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: widget.onMenu,
+                      tooltip: 'More actions',
+                    ),
                 ],
               ),
             ),

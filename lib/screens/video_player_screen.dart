@@ -10,8 +10,6 @@ import '../services/api_service.dart';
 import '../services/offline_service.dart';
 import '../services/websocket_service.dart';
 import '../config/constants.dart';
-import '../config/theme.dart';
-import '../widgets/adaptive_layout.dart';
 import '../widgets/progress_bar.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
@@ -24,74 +22,39 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
 
 class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   VideoPlayerController? _controller;
-  VideoPlayerController? _hqController;
   Timer? _progressTimer;
   Timer? _hideControlsTimer;
+  Timer? _previewTimeout;
+  Timer? _previewPollTimer;
   bool _showControls = true;
   bool _isInitialized = false;
   bool _isPreviewMode = false;
+  bool _isOfflinePlayback = false;
   String? _error;
   late final ApiService _api;
+  late final OfflineService _offline;
   StreamSubscription<WebSocketEvent>? _wsSubscription;
 
   @override
   void initState() {
     super.initState();
     _api = ref.read(apiServiceProvider);
+    _offline = ref.read(offlineServiceProvider);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _initPlayer();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final isTv = AdaptiveLayout.isTv(context);
-    if (!isTv) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    }
   }
 
   Future<void> _initPlayer() async {
     try {
-      // Path 0: Offline — play from local file
-      final offlineService = ref.read(offlineServiceProvider);
-      if (offlineService.isAvailableOffline(widget.videoId)) {
-        final localPath = offlineService.getLocalPath(widget.videoId);
+      // Path 0: Offline — play the local file without requiring network.
+      if (_offline.isAvailableOffline(widget.videoId)) {
+        final localPath = _offline.getLocalPath(widget.videoId);
         if (localPath != null) {
-          final controller = VideoPlayerController.file(File(localPath));
-          await controller.initialize();
-
-          // Resume from saved position if available
-          final video = await _api.getVideo(widget.videoId);
-          if (video.watchPositionSeconds > 0) {
-            final resumePos = (video.watchPositionSeconds - 10).clamp(
-              0,
-              video.durationSeconds,
-            );
-            await controller.seekTo(Duration(seconds: resumePos));
-          }
-
-          await controller.play();
-
-          if (!mounted) {
-            controller.dispose();
-            return;
-          }
-
-          setState(() {
-            _controller = controller;
-            _isInitialized = true;
-          });
-
-          _progressTimer?.cancel();
-          _progressTimer = Timer.periodic(
-            const Duration(seconds: AppConstants.progressSaveIntervalSeconds),
-            (_) => _saveProgress(),
-          );
-          _scheduleHideControls();
+          await _startOfflinePlayback(localPath);
           return;
         }
       }
@@ -120,11 +83,65 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         // Preview request may fail; continue listening anyway
       }
       _listenForPreviewReady(video);
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _error = e.message);
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _error = 'Failed to load video: $e');
       }
     }
+  }
+
+  Future<void> _startOfflinePlayback(String localPath) async {
+    final controller = VideoPlayerController.file(File(localPath));
+    try {
+      await controller.initialize();
+    } catch (e) {
+      controller.dispose();
+      if (mounted) {
+        setState(() => _error = 'Failed to load video: $e');
+      }
+      return;
+    }
+
+    _isOfflinePlayback = true;
+
+    // Prefer the server's resume position (3s budget) but never block
+    // playback on the network — fall back to the locally cached position.
+    var resumeSeconds = _offline.getWatchPosition(widget.videoId);
+    try {
+      final video = await _api
+          .getVideo(widget.videoId)
+          .timeout(const Duration(seconds: 3));
+      resumeSeconds = video.watchPositionSeconds;
+    } catch (_) {
+      // Offline or slow server — use the local position.
+    }
+
+    if (resumeSeconds > 0) {
+      final resumePos = (resumeSeconds - 10).clamp(
+        0,
+        controller.value.duration.inSeconds,
+      );
+      await controller.seekTo(Duration(seconds: resumePos));
+    }
+
+    await controller.play();
+
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+
+    setState(() {
+      _controller = controller;
+      _isInitialized = true;
+    });
+
+    _startProgressTimer();
+    _scheduleHideControls();
   }
 
   Future<void> _startPlayback(
@@ -166,45 +183,83 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       _isPreviewMode = isPreview;
     });
 
+    _startProgressTimer();
+    _scheduleHideControls();
+  }
+
+  void _startProgressTimer() {
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(
       const Duration(seconds: AppConstants.progressSaveIntervalSeconds),
       (_) => _saveProgress(),
     );
-
-    _scheduleHideControls();
   }
 
   void _listenForPreviewReady(Video video) {
     _wsSubscription?.cancel();
     final wsService = ref.read(webSocketServiceProvider);
 
-    // Timeout after 30s if no preview arrives
-    Timer? timeout;
-    timeout = Timer(const Duration(seconds: 30), () {
-      _wsSubscription?.cancel();
-      if (mounted && !_isInitialized) {
-        setState(() => _error = 'Preview download timed out. Try again later.');
-      }
+    // After 90s without a preview keep the WS subscription alive but also
+    // poll the API as a fallback in case the WebSocket event was missed.
+    _previewTimeout?.cancel();
+    _previewTimeout = Timer(const Duration(seconds: 90), () {
+      if (!mounted || _isInitialized) return;
+      _startPreviewPolling();
     });
 
     _wsSubscription = wsService.events.listen((event) {
       if (event.type == WebSocketEventType.previewReady &&
           event.data['video_id'] == widget.videoId) {
-        timeout?.cancel();
-        _wsSubscription?.cancel();
+        _stopWaiting();
         final previewUrl = _api.getPreviewStreamUrl(widget.videoId);
         _startPlayback(previewUrl, video, isPreview: true);
         _listenForHqReady();
       } else if (event.type == WebSocketEventType.downloadComplete &&
           event.data['video_id'] == widget.videoId) {
         // HQ finished before preview — play HQ directly
-        timeout?.cancel();
-        _wsSubscription?.cancel();
+        _stopWaiting();
         final streamUrl = _api.getVideoStreamUrl(widget.videoId);
         _startPlayback(streamUrl, video);
       }
     });
+  }
+
+  void _startPreviewPolling() {
+    _previewPollTimer?.cancel();
+    _previewPollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted || _isInitialized) {
+        _previewPollTimer?.cancel();
+        _previewPollTimer = null;
+        return;
+      }
+      try {
+        final latest = await _api.getVideo(widget.videoId);
+        if (!mounted || _isInitialized) return;
+        if (latest.status == VideoStatus.complete) {
+          _stopWaiting();
+          await _startPlayback(_api.getVideoStreamUrl(widget.videoId), latest);
+        } else if (latest.hasPreviewReady) {
+          _stopWaiting();
+          await _startPlayback(
+            _api.getPreviewStreamUrl(widget.videoId),
+            latest,
+            isPreview: true,
+          );
+          _listenForHqReady();
+        }
+      } catch (_) {
+        // Server unreachable — try again on the next tick.
+      }
+    });
+  }
+
+  void _stopWaiting() {
+    _previewTimeout?.cancel();
+    _previewTimeout = null;
+    _previewPollTimer?.cancel();
+    _previewPollTimer = null;
+    _wsSubscription?.cancel();
+    _wsSubscription = null;
   }
 
   void _listenForHqReady() {
@@ -253,11 +308,24 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
   }
 
-  void _saveProgress() {
-    if (_controller == null || !_controller!.value.isInitialized) return;
-    final position = _controller!.value.position.inSeconds;
-    if (position > 0) {
-      _api.updateProgress(widget.videoId, position);
+  /// Saves the current position. Network failures are swallowed; when the
+  /// video is also stored on this device the position is mirrored to Hive so
+  /// offline resume keeps working.
+  Future<void> _saveProgress() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    final position = controller.value.position.inSeconds;
+    if (position <= 0) return;
+
+    if (_isOfflinePlayback) {
+      unawaited(
+        _offline.setWatchPosition(widget.videoId, position).catchError((_) {}),
+      );
+    }
+    try {
+      await _api.updateProgress(widget.videoId, position);
+    } catch (_) {
+      // Offline or server unreachable — retried on the next interval.
     }
   }
 
@@ -277,6 +345,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     if (_controller == null) return;
     if (_controller!.value.isPlaying) {
       _controller!.pause();
+      // Save on pause so progress isn't lost if the app gets killed.
+      unawaited(_saveProgress());
     } else {
       _controller!.play();
     }
@@ -285,12 +355,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   Future<void> _navigateBack() async {
-    // Save progress before leaving, then invalidate so lists refresh
-    if (_controller != null && _controller!.value.isInitialized) {
-      final position = _controller!.value.position.inSeconds;
-      if (position > 0) {
-        await _api.updateProgress(widget.videoId, position);
-      }
+    // Save progress before leaving, but never block navigation on a failure.
+    try {
+      await _saveProgress();
+    } catch (_) {
+      // Ignore — progress save is best-effort.
     }
     _controller?.pause();
     if (mounted) {
@@ -349,14 +418,28 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _wsSubscription?.cancel();
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
-    // Save final position directly (can't use ref after dispose)
-    if (_controller != null && _controller!.value.isInitialized) {
-      final position = _controller!.value.position.inSeconds;
-      _api.updateProgress(widget.videoId, position);
+    _previewTimeout?.cancel();
+    _previewPollTimer?.cancel();
+    // Save final position (fire-and-forget; a failed save must never throw
+    // out of dispose).
+    final controller = _controller;
+    if (controller != null && controller.value.isInitialized) {
+      final position = controller.value.position.inSeconds;
+      if (position > 0) {
+        if (_isOfflinePlayback) {
+          unawaited(
+            _offline
+                .setWatchPosition(widget.videoId, position)
+                .catchError((_) {}),
+          );
+        }
+        unawaited(
+          _api.updateProgress(widget.videoId, position).catchError((_) {}),
+        );
+      }
     }
-    _controller?.pause();
-    _controller?.dispose();
-    _hqController?.dispose();
+    controller?.pause();
+    controller?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
@@ -420,6 +503,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
               else
                 const Center(child: CircularProgressIndicator()),
 
+              // Back button while waiting for the player to come up — the
+              // controls overlay only exists once playback started.
+              if (_error == null && !_isInitialized)
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: _navigateBack,
+                    ),
+                  ),
+                ),
+
               // 360p preview badge
               if (_isPreviewMode && _isInitialized)
                 Positioned(
@@ -481,8 +577,6 @@ class _ControlsOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTv = AdaptiveLayout.isTv(context);
-
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -502,19 +596,13 @@ class _ControlsOverlay extends StatelessWidget {
           // Top bar
           SafeArea(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: isTv ? 60.0 : 8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Row(
                 children: [
-                  if (!isTv)
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: onBack,
-                    ),
-                  if (isTv)
-                    const Text(
-                      'Press Menu to go back',
-                      style: TextStyle(color: Colors.white54, fontSize: 14),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: onBack,
+                  ),
                 ],
               ),
             ),
@@ -527,18 +615,18 @@ class _ControlsOverlay extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    iconSize: isTv ? 64 : 48,
+                    iconSize: 48,
                     icon: const Icon(Icons.replay_10, color: Colors.white),
                     onPressed: () {
                       onSeekRelative(-AppConstants.skipBackwardSeconds);
                       onInteraction();
                     },
                   ),
-                  SizedBox(width: isTv ? 48 : 32),
+                  const SizedBox(width: 32),
                   ValueListenableBuilder(
                     valueListenable: controller,
                     builder: (_, value, __) => IconButton(
-                      iconSize: isTv ? 80 : 64,
+                      iconSize: 64,
                       icon: Icon(
                         value.isPlaying
                             ? Icons.pause_circle_filled
@@ -551,9 +639,9 @@ class _ControlsOverlay extends StatelessWidget {
                       },
                     ),
                   ),
-                  SizedBox(width: isTv ? 48 : 32),
+                  const SizedBox(width: 32),
                   IconButton(
-                    iconSize: isTv ? 64 : 48,
+                    iconSize: 48,
                     icon: const Icon(Icons.forward_10, color: Colors.white),
                     onPressed: () {
                       onSeekRelative(AppConstants.skipForwardSeconds);
@@ -568,8 +656,8 @@ class _ControlsOverlay extends StatelessWidget {
           // Bottom bar with progress
           SafeArea(
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTv ? 60.0 : 16.0,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
                 vertical: 8,
               ),
               child: ValueListenableBuilder(
@@ -584,18 +672,15 @@ class _ControlsOverlay extends StatelessWidget {
                         progress: duration.inMilliseconds > 0
                             ? position.inMilliseconds / duration.inMilliseconds
                             : 0,
-                        height: isTv ? 6 : 4,
-                        onSeek: isTv
-                            ? null
-                            : (fraction) {
-                                final target = Duration(
-                                  milliseconds:
-                                      (fraction * duration.inMilliseconds)
-                                          .round(),
-                                );
-                                controller.seekTo(target);
-                                onInteraction();
-                              },
+                        height: 4,
+                        onSeek: (fraction) {
+                          final target = Duration(
+                            milliseconds: (fraction * duration.inMilliseconds)
+                                .round(),
+                          );
+                          controller.seekTo(target);
+                          onInteraction();
+                        },
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -603,41 +688,16 @@ class _ControlsOverlay extends StatelessWidget {
                         children: [
                           Text(
                             _formatDuration(position),
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white70,
-                              fontSize: isTv ? 16 : 12,
+                              fontSize: 12,
                             ),
                           ),
-                          if (isTv)
-                            const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.arrow_back_ios,
-                                  color: NullFeedTheme.primaryColor,
-                                  size: 14,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Swipe to seek',
-                                  style: TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                SizedBox(width: 4),
-                                Icon(
-                                  Icons.arrow_forward_ios,
-                                  color: NullFeedTheme.primaryColor,
-                                  size: 14,
-                                ),
-                              ],
-                            ),
                           Text(
                             _formatDuration(duration),
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white70,
-                              fontSize: isTv ? 16 : 12,
+                              fontSize: 12,
                             ),
                           ),
                         ],

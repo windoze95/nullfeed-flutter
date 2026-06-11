@@ -11,40 +11,22 @@ class DiscoverScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recommendations = ref.watch(discoverProvider);
-    final isTv = AdaptiveLayout.isTv(context);
     final padding = AdaptiveLayout.contentPadding(context);
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          if (!isTv)
-            SliverAppBar(
-              floating: true,
-              title: const Text('Discover'),
-              backgroundColor: NullFeedTheme.backgroundColor,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () =>
-                      ref.read(discoverProvider.notifier).refresh(),
-                ),
-              ],
-            )
-          else
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _TVRefreshButton(
-                      onSelect: () =>
-                          ref.read(discoverProvider.notifier).refresh(),
-                    ),
-                  ],
-                ),
+          SliverAppBar(
+            floating: true,
+            title: const Text('Discover'),
+            backgroundColor: NullFeedTheme.backgroundColor,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => ref.read(discoverProvider.notifier).refresh(),
               ),
-            ),
+            ],
+          ),
           recommendations.when(
             data: (recs) {
               if (recs.isEmpty) {
@@ -244,70 +226,6 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// TV refresh button
-// ---------------------------------------------------------------------------
-
-class _TVRefreshButton extends StatefulWidget {
-  final VoidCallback onSelect;
-  const _TVRefreshButton({required this.onSelect});
-
-  @override
-  State<_TVRefreshButton> createState() => _TVRefreshButtonState();
-}
-
-class _TVRefreshButtonState extends State<_TVRefreshButton> {
-  bool _isFocused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      onFocusChange: (f) => setState(() => _isFocused = f),
-      child: GestureDetector(
-        onTap: widget.onSelect,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: _isFocused
-                ? NullFeedTheme.primaryColor.withValues(alpha: 0.2)
-                : NullFeedTheme.cardColor,
-            border: Border.all(
-              color: _isFocused
-                  ? NullFeedTheme.primaryColor
-                  : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.refresh,
-                color: _isFocused
-                    ? NullFeedTheme.primaryColor
-                    : NullFeedTheme.textSecondary,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Refresh',
-                style: TextStyle(
-                  color: _isFocused
-                      ? NullFeedTheme.primaryColor
-                      : NullFeedTheme.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
           ),
         ),
       ),

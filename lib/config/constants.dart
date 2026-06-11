@@ -3,6 +3,7 @@ class AppConstants {
 
   static const String appName = 'NullFeed';
   static const String defaultServerPort = '8484';
+  static const String serverUrlHint = 'http://192.168.1.50:8484';
 
   // Hive box names
   static const String settingsBox = 'settings';
@@ -20,8 +21,13 @@ class AppConstants {
   static const String authProfiles = '$apiBase/auth/profiles';
   static const String authSelect = '$apiBase/auth/select';
   static const String authCreate = '$apiBase/auth/create';
+  static const String authMe = '$apiBase/auth/me';
+  static const String authLogout = '$apiBase/auth/logout';
+  static const String youtubeResolve = '$apiBase/youtube/resolve';
+  static const String youtubeSuggestions = '$apiBase/youtube/suggestions';
   static const String channels = '$apiBase/channels';
   static const String channelSubscribe = '$apiBase/channels/subscribe';
+  static const String channelSubscribeBulk = '$apiBase/channels/subscribe-bulk';
   static const String videos = '$apiBase/videos';
   static const String activeDownloads = '$apiBase/videos/downloads';
   static const String feedContinueWatching = '$apiBase/feed/continue-watching';
@@ -31,6 +37,7 @@ class AppConstants {
   static const String discoverRefresh = '$apiBase/discover/refresh';
   static const String health = '$apiBase/health';
 
+  static String authProfile(String id) => '$apiBase/auth/profiles/$id';
   static String channelDetail(String id) => '$apiBase/channels/$id';
   static String channelVideos(String id) => '$apiBase/channels/$id/videos';
   static String channelRefreshImages(String id) =>
@@ -58,7 +65,4 @@ class AppConstants {
   static const double channelCardWidth = 280.0;
   static const double videoCardWidth = 320.0;
   static const double contentRowHeight = 200.0;
-  static const double tvContentRowHeight = 300.0;
-  static const double tvVideoCardWidth = 400.0;
-  static const double tvChannelCardWidth = 360.0;
 }

@@ -63,14 +63,14 @@ class StorageService {
     return Set<String>.from(list as List);
   }
 
-  void setAutoOffline(String channelId, bool enabled) {
+  Future<void> setAutoOffline(String channelId, bool enabled) async {
     final channels = getAutoOfflineChannels();
     if (enabled) {
       channels.add(channelId);
     } else {
       channels.remove(channelId);
     }
-    _settings.put(AppConstants.autoOfflineChannelsKey, channels.toList());
+    await _settings.put(AppConstants.autoOfflineChannelsKey, channels.toList());
   }
 
   bool isAutoOfflineEnabled(String channelId) {
