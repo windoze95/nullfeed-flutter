@@ -12,7 +12,7 @@ on:
 
 jobs:
   beta:
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: read
     steps:
@@ -42,15 +42,19 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
-      - name: Select Xcode 16 (iOS 18 SDK)
+      # App Store Connect requires the iOS 26 SDK (Xcode 26) for uploads
+      # as of June 2026.
+      - name: Select Xcode 26 (iOS 26 SDK)
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: "16"
+          xcode-version: "26"
 
+      # Pinned to the same version CI validates (FLUTTER_VERSION in ci.yml)
+      # so the shipped binary is built with the toolchain that was tested.
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: "stable"
+          flutter-version: "3.41.4"
           cache: true
 
       - name: Install dependencies and generate code
