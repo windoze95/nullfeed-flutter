@@ -287,6 +287,21 @@ class ApiService {
         .toList();
   });
 
+  /// Polls one channel for new uploads synchronously (server runs a single
+  /// yt-dlp call). Used by pull-to-refresh on the channel screen.
+  Future<void> pollChannel(String channelId) => _guard(() async {
+    await _dio.post(
+      '$_baseUrl${AppConstants.channelPoll(channelId)}',
+      options: Options(receiveTimeout: _slowReceiveTimeout),
+    );
+  });
+
+  /// Kicks off a background poll of all channels (fire-and-forget on the
+  /// server). Used by pull-to-refresh on home/library.
+  Future<void> pollAllChannels() => _guard(() async {
+    await _dio.post('$_baseUrl${AppConstants.channelPollAll}');
+  });
+
   Future<Channel> refreshChannelImages(String channelId) => _guard(() async {
     final response = await _dio.post(
       '$_baseUrl${AppConstants.channelRefreshImages(channelId)}',

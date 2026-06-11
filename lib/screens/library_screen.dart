@@ -134,7 +134,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     return Scaffold(
       body: RefreshIndicator(
         color: NullFeedTheme.primaryColor,
-        onRefresh: () => ref.read(channelsProvider.notifier).load(),
+        onRefresh: () {
+          // Kick a server-side poll for new uploads alongside the reload.
+          unawaited(
+            ref.read(apiServiceProvider).pollAllChannels().catchError((_) {}),
+          );
+          return ref.read(channelsProvider.notifier).load();
+        },
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
