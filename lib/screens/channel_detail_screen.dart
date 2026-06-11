@@ -113,6 +113,14 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   }
 
   Future<void> _refresh() async {
+    // Ask the server to check YouTube for new uploads first, so a pull
+    // down genuinely refreshes content rather than re-reading the catalog.
+    try {
+      await ref.read(apiServiceProvider).pollChannel(widget.channelId);
+    } catch (_) {
+      // Poll failures (offline server, YouTube hiccup) shouldn't block
+      // refreshing what we already have.
+    }
     try {
       await Future.wait([
         ref.refresh(channelDetailProvider(widget.channelId).future),

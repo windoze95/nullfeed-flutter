@@ -28,6 +28,7 @@ class AppConstants {
   static const String channels = '$apiBase/channels';
   static const String channelSubscribe = '$apiBase/channels/subscribe';
   static const String channelSubscribeBulk = '$apiBase/channels/subscribe-bulk';
+  static const String channelPollAll = '$apiBase/channels/poll';
   static const String videos = '$apiBase/videos';
   static const String activeDownloads = '$apiBase/videos/downloads';
   static const String feedContinueWatching = '$apiBase/feed/continue-watching';
@@ -40,6 +41,7 @@ class AppConstants {
   static String authProfile(String id) => '$apiBase/auth/profiles/$id';
   static String channelDetail(String id) => '$apiBase/channels/$id';
   static String channelVideos(String id) => '$apiBase/channels/$id/videos';
+  static String channelPoll(String id) => '$apiBase/channels/$id/poll';
   static String channelRefreshImages(String id) =>
       '$apiBase/channels/$id/refresh-images';
   static String channelUnsubscribe(String id) =>

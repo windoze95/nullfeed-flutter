@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/feed.dart';
 import '../providers/feed_provider.dart';
 import '../providers/websocket_provider.dart';
+import '../services/api_service.dart';
 import '../widgets/content_row.dart';
 import '../widgets/video_card.dart';
 import '../config/theme.dart';
@@ -58,6 +61,11 @@ class HomeScreen extends ConsumerWidget {
     );
 
     Future<void> refresh() async {
+      // Fire-and-forget: kick a server-side poll of all channels so new
+      // uploads start flowing in; results land via WS events / next refresh.
+      unawaited(
+        ref.read(apiServiceProvider).pollAllChannels().catchError((_) {}),
+      );
       try {
         await Future.wait([
           ref.refresh(continueWatchingProvider.future),
