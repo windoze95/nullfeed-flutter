@@ -90,18 +90,23 @@ class OfflineService {
     onListChanged?.call();
 
     try {
+      var lastUpdate = DateTime.now().millisecondsSinceEpoch;
       await _dio.download(
         url,
         localPath,
         cancelToken: cancelToken,
         onReceiveProgress: (received, total) {
           if (total > 0) {
-            final progress = received / total;
-            _updateEntry(videoId, {
-              'progress': progress,
-              'file_size_bytes': total,
-            });
-            onProgress?.call(videoId, progress);
+            final now = DateTime.now().millisecondsSinceEpoch;
+            if (now - lastUpdate > 500 || received == total) {
+              lastUpdate = now;
+              final progress = received / total;
+              _updateEntry(videoId, {
+                'progress': progress,
+                'file_size_bytes': total,
+              });
+              onProgress?.call(videoId, progress);
+            }
           }
         },
       );
