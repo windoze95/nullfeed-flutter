@@ -183,7 +183,10 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     final progressMap = ref.watch(downloadProgressProvider);
     final padding = AdaptiveLayout.contentPadding(context);
 
-    videosAsync.whenData(_checkPollingNeeded);
+    ref.listen<AsyncValue<List<Video>>>(
+      channelVideosProvider(widget.channelId),
+      (_, next) => next.whenData(_checkPollingNeeded),
+    );
 
     return Scaffold(
       // The loaded state brings its own SliverAppBar; loading/error states
