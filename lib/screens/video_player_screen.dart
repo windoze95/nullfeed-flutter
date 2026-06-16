@@ -321,8 +321,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         _isPreviewMode = false;
       });
 
-      oldController?.pause();
-      oldController?.dispose();
+      Future.microtask(() {
+        oldController?.pause();
+        oldController?.dispose();
+      });
     } catch (e) {
       // HQ switch failed — keep playing preview (silent fallback)
       debugPrint('HQ switch failed, continuing preview: $e');
@@ -696,8 +698,8 @@ class _ControlsOverlay extends StatelessWidget {
                         height: 4,
                         onSeek: (fraction) {
                           final target = Duration(
-                            milliseconds: (fraction * duration.inMilliseconds)
-                                .round(),
+                            milliseconds:
+                                (fraction * duration.inMilliseconds).round(),
                           );
                           controller.seekTo(target);
                           onInteraction();
