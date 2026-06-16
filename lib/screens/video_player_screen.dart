@@ -377,11 +377,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   Future<void> _navigateBack() async {
     // Save progress before leaving, but never block navigation on a failure.
-    try {
-      await _saveProgress();
-    } catch (_) {
-      // Ignore — progress save is best-effort.
-    }
+    unawaited(_saveProgress().catchError((_) {}));
     _controller?.pause();
     if (mounted) {
       Navigator.of(context).pop();
