@@ -32,6 +32,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   bool _isOfflinePlayback = false;
   bool _startingPlayback = false;
   bool _pendingHqSwitch = false;
+  bool _progressSavedOnExit = false;
   String? _error;
   late final ApiService _api;
   late final OfflineService _offline;
@@ -377,11 +378,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   Future<void> _navigateBack() async {
     // Save progress before leaving, but never block navigation on a failure.
-    try {
-      await _saveProgress();
-    } catch (_) {
-      // Ignore — progress save is best-effort.
-    }
+    _progressSavedOnExit = true;
+    unawaited(_saveProgress().catchError((_) {}));
     _controller?.pause();
     if (mounted) {
       Navigator.of(context).pop();
@@ -442,9 +440,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _previewTimeout?.cancel();
     _previewPollTimer?.cancel();
     // Save final position (fire-and-forget; a failed save must never throw
-    // out of dispose).
+    // out of dispose). Skip if already saved by _navigateBack.
     final controller = _controller;
-    if (controller != null && controller.value.isInitialized) {
+    if (!_progressSavedOnExit &&
+        controller != null &&
+        controller.value.isInitialized) {
       final position = controller.value.position.inSeconds;
       if (position > 0) {
         if (_isOfflinePlayback) {
