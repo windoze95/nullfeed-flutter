@@ -32,6 +32,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   bool _isOfflinePlayback = false;
   bool _startingPlayback = false;
   bool _pendingHqSwitch = false;
+  bool _progressSavedOnExit = false;
   String? _error;
   late final ApiService _api;
   late final OfflineService _offline;
@@ -321,8 +322,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         _isPreviewMode = false;
       });
 
-      oldController?.pause();
-      oldController?.dispose();
+      // Tear down the preview controller only after this frame has rendered
+      // with the HQ controller — disposing it synchronously can leave the
+      // outgoing VideoPlayer reading a disposed controller mid-frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldController?.pause();
+        oldController?.dispose();
+      });
     } catch (e) {
       // HQ switch failed — keep playing preview (silent fallback)
       debugPrint('HQ switch failed, continuing preview: $e');
@@ -375,13 +381,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _scheduleHideControls();
   }
 
-  Future<void> _navigateBack() async {
-    // Save progress before leaving, but never block navigation on a failure.
-    try {
-      await _saveProgress();
-    } catch (_) {
-      // Ignore — progress save is best-effort.
-    }
+  void _navigateBack() {
+    // Fire-and-forget the final save so leaving is instant even on a slow or
+    // dead network. The guard stops dispose() from saving a second time, so
+    // teardown sends exactly one /progress PUT.
+    _progressSavedOnExit = true;
+    unawaited(_saveProgress());
     _controller?.pause();
     if (mounted) {
       Navigator.of(context).pop();
@@ -442,9 +447,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _previewTimeout?.cancel();
     _previewPollTimer?.cancel();
     // Save final position (fire-and-forget; a failed save must never throw
-    // out of dispose).
+    // out of dispose). Skipped when _navigateBack already fired the save on
+    // the way out, so teardown sends exactly one /progress PUT.
     final controller = _controller;
-    if (controller != null && controller.value.isInitialized) {
+    if (!_progressSavedOnExit &&
+        controller != null &&
+        controller.value.isInitialized) {
       final position = controller.value.position.inSeconds;
       if (position > 0) {
         if (_isOfflinePlayback) {

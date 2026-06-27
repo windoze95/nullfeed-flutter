@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/app_globals.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
@@ -45,6 +48,9 @@ class AuthState {
 class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
+    // Let the API layer hand a dead-session 401 back to us so any screen can
+    // recover gracefully instead of dead-ending.
+    _api.onUnauthorized = _onApiUnauthorized;
     // Deferred so the synchronous part of _restoreSession (which writes
     // `state`) runs after build() returns and the provider is initialized.
     Future.microtask(_restoreSession);
@@ -234,6 +240,29 @@ class AuthNotifier extends Notifier<AuthState> {
         error: _describe(e, 'Failed to delete profile'),
       );
     }
+  }
+
+  /// Wired to [ApiService.onUnauthorized]: resets to the picker and tells the
+  /// user once, even if several requests 401 at the same time.
+  void _onApiUnauthorized() {
+    if (handleSessionExpired()) {
+      showGlobalSnackBar('Session expired — sign in again');
+    }
+  }
+
+  /// Tears down a signed-in session locally after the server rejected it
+  /// (a 401 on a protected endpoint). Mirrors [signOut]'s local cleanup but
+  /// skips the logout round-trip — the session is already gone. Returns true
+  /// only when a signed-in session was actually cleared, so a burst of 401s
+  /// resets (and notifies) exactly once.
+  bool handleSessionExpired() {
+    if (state.currentUser == null) return false;
+    // Reset synchronously first so the router redirects and any concurrent
+    // 401 sees the cleared state and bails.
+    state = AuthState(profiles: state.profiles);
+    ref.read(webSocketServiceProvider).disconnect();
+    unawaited(_storage.clearSession());
+    return true;
   }
 
   Future<void> signOut() async {

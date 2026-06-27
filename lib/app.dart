@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'config/app_globals.dart';
 import 'config/theme.dart';
 import 'config/routes.dart';
 
@@ -12,6 +13,7 @@ class NullFeedApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'NullFeed',
+      scaffoldMessengerKey: scaffoldMessengerKey,
       theme: NullFeedTheme.darkTheme,
       darkTheme: NullFeedTheme.darkTheme,
       themeMode: ThemeMode.dark,
