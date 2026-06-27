@@ -23,10 +23,17 @@ class ApiException implements Exception {
   final int? statusCode;
   final bool isConnectionError;
 
+  /// Machine-readable error code from the backend error envelope
+  /// (e.g. `unauthorized`, `not_found`, `conflict`, `validation_error`,
+  /// `rate_limited`). Null for connection failures and any legacy/plain
+  /// responses that only carry a `detail` string.
+  final String? code;
+
   const ApiException({
     required this.message,
     this.statusCode,
     this.isConnectionError = false,
+    this.code,
   });
 
   factory ApiException.fromDioException(DioException error) {
@@ -40,9 +47,15 @@ class ApiException implements Exception {
     };
 
     String? detail;
+    String? code;
     final data = error.response?.data;
-    if (data is Map && data['detail'] is String) {
-      detail = data['detail'] as String;
+    if (data is Map) {
+      if (data['detail'] is String) {
+        detail = data['detail'] as String;
+      }
+      if (data['code'] is String) {
+        code = data['code'] as String;
+      }
     }
 
     final message =
@@ -57,6 +70,7 @@ class ApiException implements Exception {
       message: message,
       statusCode: statusCode,
       isConnectionError: isConnectionError,
+      code: code,
     );
   }
 
@@ -390,6 +404,18 @@ class ApiService {
   }
 
   // Feed
+
+  /// Unified home feed: continue-watching, new-episodes and recently-added in
+  /// a single round-trip. Preferred over the three per-row endpoints below,
+  /// which remain for callers that need an individual row.
+  Future<HomeFeed> getHomeFeed({int limit = 20}) => _guard(() async {
+    final response = await _dio.get(
+      '$_baseUrl${AppConstants.feedHome}',
+      queryParameters: {'limit': limit},
+    );
+    return HomeFeed.fromJson(response.data as Map<String, dynamic>);
+  });
+
   Future<List<FeedItem>> getContinueWatching() => _guard(() async {
     final response = await _dio.get(
       '$_baseUrl${AppConstants.feedContinueWatching}',

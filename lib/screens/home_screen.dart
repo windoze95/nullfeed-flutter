@@ -13,36 +13,48 @@ import '../config/theme.dart';
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  Widget _buildFeed(HomeFeed feed) {
+    final allEmpty =
+        feed.continueWatching.isEmpty &&
+        feed.newEpisodes.isEmpty &&
+        feed.recentlyAdded.isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        if (feed.continueWatching.isNotEmpty)
+          _buildRow(
+            title: 'Continue Watching',
+            items: feed.continueWatching,
+            showProgress: true,
+          ),
+        if (feed.newEpisodes.isNotEmpty)
+          _buildRow(title: 'New Episodes', items: feed.newEpisodes),
+        if (feed.recentlyAdded.isNotEmpty)
+          _buildRow(title: 'Recently Added', items: feed.recentlyAdded),
+        if (allEmpty) const _EmptyHomeState(),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
   Widget _buildRow({
     required String title,
-    required AsyncValue<List<FeedItem>> items,
-    required VoidCallback onRetry,
+    required List<FeedItem> items,
     bool showProgress = false,
   }) {
-    return items.when(
-      data: (list) {
-        if (list.isEmpty) return const SizedBox.shrink();
-        return ContentRow(
-          title: title,
-          children: list
-              .map(
-                (item) => VideoCard(
-                  video: item.video,
-                  channel: item.channel,
-                  showProgress: showProgress,
-                ),
-              )
-              .toList(),
-        );
-      },
-      loading: () =>
-          ContentRow(title: title, isLoading: true, children: const []),
-      error: (error, _) => ContentRow(
-        title: title,
-        errorText: '$error',
-        onRetry: onRetry,
-        children: const [],
-      ),
+    return ContentRow(
+      title: title,
+      children: items
+          .map(
+            (item) => VideoCard(
+              video: item.video,
+              channel: item.channel,
+              showProgress: showProgress,
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -51,14 +63,9 @@ class HomeScreen extends ConsumerWidget {
     // Initialize WebSocket connection
     ref.watch(webSocketConnectionProvider);
 
-    final continueWatching = ref.watch(continueWatchingProvider);
-    final newEpisodes = ref.watch(newEpisodesProvider);
-    final recentlyAdded = ref.watch(recentlyAddedProvider);
-
-    final rows = [continueWatching, newEpisodes, recentlyAdded];
-    final allEmpty = rows.every(
-      (row) => row.hasValue && !row.hasError && (row.value?.isEmpty ?? false),
-    );
+    // The whole feed now arrives in a single request; rows are derived from it
+    // and the WebSocket service invalidates this provider for live updates.
+    final homeFeed = ref.watch(homeFeedProvider);
 
     Future<void> refresh() async {
       // Fire-and-forget: kick a server-side poll of all channels so new
@@ -66,14 +73,12 @@ class HomeScreen extends ConsumerWidget {
       unawaited(
         ref.read(apiServiceProvider).pollAllChannels().catchError((_) {}),
       );
+      // Reload the unified feed and keep the spinner up until it resolves.
+      final reload = ref.refresh(homeFeedProvider.future);
       try {
-        await Future.wait([
-          ref.refresh(continueWatchingProvider.future),
-          ref.refresh(newEpisodesProvider.future),
-          ref.refresh(recentlyAddedProvider.future),
-        ]);
+        await reload;
       } catch (_) {
-        // Each row renders its own inline error state.
+        // The inline error state renders instead.
       }
     }
 
@@ -100,31 +105,73 @@ class HomeScreen extends ConsumerWidget {
               backgroundColor: NullFeedTheme.backgroundColor,
             ),
             SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
-                  _buildRow(
-                    title: 'Continue Watching',
-                    items: continueWatching,
-                    onRetry: () => ref.invalidate(continueWatchingProvider),
-                    showProgress: true,
-                  ),
-                  _buildRow(
-                    title: 'New Episodes',
-                    items: newEpisodes,
-                    onRetry: () => ref.invalidate(newEpisodesProvider),
-                  ),
-                  _buildRow(
-                    title: 'Recently Added',
-                    items: recentlyAdded,
-                    onRetry: () => ref.invalidate(recentlyAddedProvider),
-                  ),
-                  if (allEmpty) const _EmptyHomeState(),
-                  const SizedBox(height: 24),
-                ],
+              child: homeFeed.when(
+                data: _buildFeed,
+                loading: () => const _HomeFeedSkeleton(),
+                error: (error, _) => _HomeFeedError(
+                  message: '$error',
+                  onRetry: () => ref.invalidate(homeFeedProvider),
+                ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shimmer placeholders for the three rows while the feed loads.
+class _HomeFeedSkeleton extends StatelessWidget {
+  const _HomeFeedSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 8),
+        ContentRow(title: 'Continue Watching', isLoading: true, children: []),
+        ContentRow(title: 'New Episodes', isLoading: true, children: []),
+        ContentRow(title: 'Recently Added', isLoading: true, children: []),
+        SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+class _HomeFeedError extends StatelessWidget {
+  const _HomeFeedError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 120, horizontal: 48),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 64,
+              color: NullFeedTheme.errorColor,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Could not load your feed',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),

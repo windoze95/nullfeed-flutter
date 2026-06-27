@@ -72,6 +72,35 @@ void main() {
       expect(exception.message, 'Request failed (400)');
     });
 
+    test('parses the machine-readable code alongside the detail', () {
+      final exception = ApiException.fromDioException(
+        _dioError(
+          statusCode: 409,
+          data: {'detail': 'Already subscribed', 'code': 'conflict'},
+        ),
+      );
+
+      expect(exception.message, 'Already subscribed');
+      expect(exception.code, 'conflict');
+      expect(exception.statusCode, 409);
+    });
+
+    test('leaves code null when the envelope omits it', () {
+      final exception = ApiException.fromDioException(
+        _dioError(statusCode: 500, data: {'detail': 'boom'}),
+      );
+
+      expect(exception.code, isNull);
+    });
+
+    test('ignores a non-string code', () {
+      final exception = ApiException.fromDioException(
+        _dioError(statusCode: 400, data: {'detail': 'bad', 'code': 42}),
+      );
+
+      expect(exception.code, isNull);
+    });
+
     test('falls back to a generic message when there is no response', () {
       final exception = ApiException.fromDioException(
         _dioError(type: DioExceptionType.unknown),
