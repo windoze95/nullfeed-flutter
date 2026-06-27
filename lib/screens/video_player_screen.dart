@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/video.dart';
 import '../providers/websocket_provider.dart';
 import '../services/api_service.dart';
@@ -142,6 +143,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       _controller = controller;
       _isInitialized = true;
     });
+    // Playback has started — keep the screen awake until the player closes.
+    unawaited(WakelockPlus.enable());
 
     _startProgressTimer();
     _scheduleHideControls();
@@ -193,6 +196,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       _isPreviewMode = isPreview;
     });
     _startingPlayback = false;
+    // Playback has started — keep the screen awake until the player closes.
+    unawaited(WakelockPlus.enable());
 
     // An HQ-ready event may have arrived while the preview was initializing.
     if (isPreview && _pendingHqSwitch) {
@@ -469,6 +474,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
     controller?.pause();
     controller?.dispose();
+    // Re-allow the screen to sleep now that playback is over.
+    unawaited(WakelockPlus.disable());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();

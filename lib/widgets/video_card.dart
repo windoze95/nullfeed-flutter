@@ -41,14 +41,18 @@ class _VideoCardState extends ConsumerState<VideoCard> {
   }
 
   Future<void> _onActivate() async {
-    if (widget.showProgress) {
-      await context.push('/player/${widget.video.id}');
-      // Watch positions likely changed — refresh the home feed rows.
-      if (!mounted) return;
-      invalidateFeedProviders(ref);
-    } else if (widget.channel != null) {
-      context.push('/channel/${widget.channel!.id}');
-    }
+    // Every home-feed card plays its video on tap; channel navigation lives
+    // on the channel sub-row below (see [_openChannel]).
+    await context.push('/player/${widget.video.id}');
+    // Watch positions likely changed — refresh the home feed rows.
+    if (!mounted) return;
+    invalidateFeedProviders(ref);
+  }
+
+  void _openChannel() {
+    final channel = widget.channel;
+    if (channel == null) return;
+    context.push('/channel/${channel.id}');
   }
 
   @override
@@ -223,31 +227,35 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                 if (widget.channel != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      children: [
-                        if (widget.channel!.avatarUrl != null)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: CircleAvatar(
-                              radius: 10,
-                              backgroundImage: CachedNetworkImageProvider(
-                                widget.channel!.avatarUrl!,
+                    child: GestureDetector(
+                      onTap: _openChannel,
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          if (widget.channel!.avatarUrl != null)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: CircleAvatar(
+                                radius: 10,
+                                backgroundImage: CachedNetworkImageProvider(
+                                  widget.channel!.avatarUrl!,
+                                ),
+                                backgroundColor: NullFeedTheme.cardColor,
                               ),
-                              backgroundColor: NullFeedTheme.cardColor,
+                            ),
+                          Expanded(
+                            child: Text(
+                              widget.channel!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: NullFeedTheme.textMuted,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                        Expanded(
-                          child: Text(
-                            widget.channel!.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: NullFeedTheme.textMuted,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
               ],
