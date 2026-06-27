@@ -66,6 +66,13 @@ class ApiException implements Exception {
 
 class ApiService {
   final StorageService storage;
+
+  /// Called when a protected (non-auth) endpoint returns 401, signalling the
+  /// stored session is dead server-side. Wired by [apiServiceProvider] to
+  /// reset auth and prompt re-sign-in. Auth endpoints are excluded — they
+  /// return 401/403 for bad credentials and are handled inline by callers.
+  void Function()? onUnauthorized;
+
   late final Dio _dio;
 
   ApiService({required this.storage}) {
@@ -90,6 +97,15 @@ class ApiService {
           handler.next(options);
         },
         onError: (error, handler) {
+          // A real 401 response (connection failures carry no response) on a
+          // protected endpoint means the session is no longer valid
+          // server-side. Auth endpoints legitimately return 401/403 for bad
+          // credentials, so they're excluded and surface inline instead of
+          // forcing a global sign-out.
+          if (error.response?.statusCode == 401 &&
+              !_isAuthEndpoint(error.requestOptions)) {
+            onUnauthorized?.call();
+          }
           handler.next(error);
         },
       ),
@@ -97,6 +113,12 @@ class ApiService {
   }
 
   String get _baseUrl => storage.getServerUrl() ?? 'http://localhost:8484';
+
+  /// Auth/credential endpoints (sign-in, profile management, session probe)
+  /// legitimately return 401/403, so a 401 here must NOT trigger a global
+  /// session reset — callers surface it inline.
+  bool _isAuthEndpoint(RequestOptions options) =>
+      options.uri.path.contains('${AppConstants.apiBase}/auth/');
 
   /// Generous timeout for endpoints that shell out to yt-dlp server-side.
   static const _slowReceiveTimeout = Duration(seconds: 90);

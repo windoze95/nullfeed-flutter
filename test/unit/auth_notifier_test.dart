@@ -299,6 +299,58 @@ void main() {
     });
   });
 
+  group('handleSessionExpired', () {
+    Future<ProviderContainer> signedInContainer() async {
+      final alice = makeUser();
+      when(() => api.getProfiles()).thenAnswer((_) async => [alice]);
+      when(
+        () => api.selectProfile('u1', pin: null),
+      ).thenAnswer((_) async => (user: alice, token: 'tok-1'));
+      final container = createContainer();
+      final notifier = container.read(authStateProvider.notifier);
+      await notifier.loadProfiles();
+      await notifier.selectProfile('u1');
+      expect(container.read(authStateProvider).currentUser, alice);
+      return container;
+    }
+
+    test('resets to the picker and clears storage on a server 401', () async {
+      final container = await signedInContainer();
+      final notifier = container.read(authStateProvider.notifier);
+
+      final didReset = notifier.handleSessionExpired();
+
+      expect(didReset, isTrue);
+      final state = container.read(authStateProvider);
+      expect(state.currentUser, isNull);
+      expect(state.profiles, hasLength(1), reason: 'profiles are kept');
+      verify(() => webSocket.disconnect()).called(1);
+      verify(() => storage.clearSession()).called(1);
+    });
+
+    test('is a no-op when nobody is signed in', () {
+      final container = createContainer();
+      final notifier = container.read(authStateProvider.notifier);
+
+      expect(notifier.handleSessionExpired(), isFalse);
+      expect(container.read(authStateProvider).currentUser, isNull);
+      verifyNever(() => webSocket.disconnect());
+      verifyNever(() => storage.clearSession());
+    });
+
+    test('a burst of 401s resets exactly once', () async {
+      final container = await signedInContainer();
+      final notifier = container.read(authStateProvider.notifier);
+
+      expect(notifier.handleSessionExpired(), isTrue);
+      expect(notifier.handleSessionExpired(), isFalse);
+      expect(notifier.handleSessionExpired(), isFalse);
+
+      verify(() => webSocket.disconnect()).called(1);
+      verify(() => storage.clearSession()).called(1);
+    });
+  });
+
   group('deleteProfile', () {
     test('deleting the current user clears the session', () async {
       final alice = makeUser();
