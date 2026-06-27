@@ -8,6 +8,7 @@ enum WebSocketEventType {
   downloadComplete,
   previewReady,
   newEpisode,
+  progressUpdated,
   recommendationReady,
   unknown,
 }
@@ -26,6 +27,7 @@ class WebSocketEvent {
       'download_complete' => WebSocketEventType.downloadComplete,
       'preview_ready' => WebSocketEventType.previewReady,
       'new_episode' => WebSocketEventType.newEpisode,
+      'progress_updated' => WebSocketEventType.progressUpdated,
       'recommendation_ready' => WebSocketEventType.recommendationReady,
       _ => WebSocketEventType.unknown,
     };

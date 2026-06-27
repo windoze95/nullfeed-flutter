@@ -78,6 +78,7 @@ void main() {
         'download_complete': WebSocketEventType.downloadComplete,
         'preview_ready': WebSocketEventType.previewReady,
         'new_episode': WebSocketEventType.newEpisode,
+        'progress_updated': WebSocketEventType.progressUpdated,
         'recommendation_ready': WebSocketEventType.recommendationReady,
         'something_else': WebSocketEventType.unknown,
       };

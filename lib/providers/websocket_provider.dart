@@ -58,6 +58,7 @@ final webSocketConnectionProvider = Provider<void>((ref) {
         ref.invalidate(continueWatchingProvider);
         ref.invalidate(newEpisodesProvider);
         ref.invalidate(recentlyAddedProvider);
+        ref.invalidate(homeFeedProvider);
         // Auto-offline: download to device if enabled for this channel
         if (videoId != null && channelId != null) {
           final storageService = ref.read(storageServiceProvider);
@@ -84,8 +85,19 @@ final webSocketConnectionProvider = Provider<void>((ref) {
       case WebSocketEventType.previewReady:
         break; // Player screen listens directly via wsService.events
       case WebSocketEventType.newEpisode:
+        // New content landed server-side — refresh the home feed in place.
         ref.invalidate(newEpisodesProvider);
         ref.invalidate(recentlyAddedProvider);
+        ref.invalidate(homeFeedProvider);
+      case WebSocketEventType.progressUpdated:
+        // Cross-device watch-progress sync: another device moved the playhead,
+        // so resume positions and continue-watching ordering may have changed.
+        final videoId = event.data['video_id'] as String?;
+        if (videoId != null) {
+          ref.invalidate(videoDetailProvider(videoId));
+        }
+        ref.invalidate(continueWatchingProvider);
+        ref.invalidate(homeFeedProvider);
       case WebSocketEventType.recommendationReady:
         ref.read(discoverProvider.notifier).load();
       case WebSocketEventType.unknown:

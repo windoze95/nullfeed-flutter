@@ -74,6 +74,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(channelDetailProvider);
     ref.invalidate(channelVideosProvider);
     ref.invalidate(videoDetailProvider);
+    ref.invalidate(homeFeedProvider);
     ref.invalidate(continueWatchingProvider);
     ref.invalidate(newEpisodesProvider);
     ref.invalidate(recentlyAddedProvider);

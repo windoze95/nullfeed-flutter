@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nullfeed/models/channel.dart';
+import 'package:nullfeed/models/feed.dart';
 import 'package:nullfeed/models/json_converters.dart';
 import 'package:nullfeed/models/user.dart';
 import 'package:nullfeed/models/video.dart';
@@ -201,6 +202,44 @@ void main() {
 
       expect(video.uploadedAt, isNull);
       expect(video.status, VideoStatus.cataloged);
+    });
+  });
+
+  group('HomeFeed', () {
+    Map<String, dynamic> feedItem(String videoId) => {
+      'channel': {
+        'id': 'c1',
+        'youtube_channel_id': 'UCabc',
+        'name': 'Some Channel',
+        'slug': 'some-channel',
+      },
+      'video': {
+        'id': videoId,
+        'youtube_video_id': 'yt-$videoId',
+        'channel_id': 'c1',
+        'title': 'Video $videoId',
+      },
+    };
+
+    test('parses the three rows from the unified payload', () {
+      final feed = HomeFeed.fromJson({
+        'continue_watching': [feedItem('v1')],
+        'new_episodes': [feedItem('v2'), feedItem('v3')],
+        'recently_added': [feedItem('v4')],
+      });
+
+      expect(feed.continueWatching.single.video.id, 'v1');
+      expect(feed.newEpisodes, hasLength(2));
+      expect(feed.recentlyAdded.single.video.id, 'v4');
+      expect(feed.continueWatching.single.channel.name, 'Some Channel');
+    });
+
+    test('defaults each row to empty when a key is absent', () {
+      final feed = HomeFeed.fromJson(const {});
+
+      expect(feed.continueWatching, isEmpty);
+      expect(feed.newEpisodes, isEmpty);
+      expect(feed.recentlyAdded, isEmpty);
     });
   });
 

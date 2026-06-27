@@ -31,6 +31,7 @@ class AppConstants {
   static const String channelPollAll = '$apiBase/channels/poll';
   static const String videos = '$apiBase/videos';
   static const String activeDownloads = '$apiBase/videos/downloads';
+  static const String feedHome = '$apiBase/feed/home';
   static const String feedContinueWatching = '$apiBase/feed/continue-watching';
   static const String feedNewEpisodes = '$apiBase/feed/new-episodes';
   static const String feedRecentlyAdded = '$apiBase/feed/recently-added';
