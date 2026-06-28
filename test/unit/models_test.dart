@@ -4,6 +4,7 @@ import 'package:nullfeed/models/feed.dart';
 import 'package:nullfeed/models/json_converters.dart';
 import 'package:nullfeed/models/user.dart';
 import 'package:nullfeed/models/video.dart';
+import 'package:nullfeed/models/video_page.dart';
 import 'package:nullfeed/models/youtube_import.dart';
 
 void main() {
@@ -256,6 +257,50 @@ void main() {
       expect(channel.lastCheckedAt, DateTime.utc(2026, 6, 11, 9, 15));
       expect(channel.lastCheckedAt!.isUtc, isTrue);
       expect(Channel.fromJson(channel.toJson()), channel);
+    });
+  });
+
+  group('VideoPage', () {
+    Map<String, dynamic> videoJson(String id) => {
+      'id': id,
+      'youtube_video_id': 'yt-$id',
+      'channel_id': 'c1',
+      'title': 'Video $id',
+    };
+
+    test('parses items, total and next_cursor (a non-final page)', () {
+      final page = VideoPage.fromJson({
+        'items': [videoJson('v1'), videoJson('v2')],
+        'total': 7,
+        'next_cursor': 'opaque-cursor-token',
+      });
+
+      expect(page.items, hasLength(2));
+      expect(page.items.first.id, 'v1');
+      expect(page.items.first.title, 'Video v1');
+      expect(page.total, 7);
+      expect(page.nextCursor, 'opaque-cursor-token');
+      expect(page.hasMore, isTrue);
+    });
+
+    test('treats a null next_cursor as the last page', () {
+      final page = VideoPage.fromJson({
+        'items': [videoJson('v1')],
+        'total': 1,
+        'next_cursor': null,
+      });
+
+      expect(page.nextCursor, isNull);
+      expect(page.hasMore, isFalse);
+    });
+
+    test('defaults items to empty and total to 0 when keys are absent', () {
+      final page = VideoPage.fromJson(const {});
+
+      expect(page.items, isEmpty);
+      expect(page.total, 0);
+      expect(page.nextCursor, isNull);
+      expect(page.hasMore, isFalse);
     });
   });
 }

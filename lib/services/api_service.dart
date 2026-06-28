@@ -4,6 +4,7 @@ import '../config/constants.dart';
 import '../models/user.dart';
 import '../models/channel.dart';
 import '../models/video.dart';
+import '../models/video_page.dart';
 import '../models/feed.dart';
 import '../models/recommendation.dart';
 import '../models/youtube_import.dart';
@@ -402,6 +403,45 @@ class ApiService {
     final base = '$_baseUrl${AppConstants.videoPreviewStream(id)}';
     return token != null ? '$base?token=$token' : base;
   }
+
+  // Search
+
+  /// Searches the caller's library, matching [q] against video title or
+  /// channel name. Returns one cursor-paginated page; pass
+  /// [VideoPage.nextCursor] back as [cursor] for the next page (null = last
+  /// page). An empty/absent [q] lists the whole library, newest-first.
+  Future<VideoPage> searchVideos({
+    String? q,
+    String? status,
+    bool? watched,
+    String? channelId,
+    String? cursor,
+    int limit = 20,
+  }) => _guard(() async {
+    final response = await _dio.get(
+      '$_baseUrl${AppConstants.videos}',
+      queryParameters: {
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (status != null) 'status': status,
+        if (watched != null) 'watched': watched,
+        if (channelId != null) 'channel_id': channelId,
+        if (cursor != null) 'cursor': cursor,
+        'limit': limit,
+      },
+    );
+    return VideoPage.fromJson(response.data as Map<String, dynamic>);
+  });
+
+  /// Filters subscribed channels by name. Backs the channel section of search.
+  Future<List<Channel>> searchChannels(String q) => _guard(() async {
+    final response = await _dio.get(
+      '$_baseUrl${AppConstants.channels}',
+      queryParameters: {'q': q},
+    );
+    return (response.data as List)
+        .map((json) => Channel.fromJson(json as Map<String, dynamic>))
+        .toList();
+  });
 
   // Feed
 
