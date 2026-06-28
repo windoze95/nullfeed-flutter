@@ -28,6 +28,10 @@ class AppConstants {
   static const String authCreate = '$apiBase/auth/create';
   static const String authMe = '$apiBase/auth/me';
   static const String authLogout = '$apiBase/auth/logout';
+
+  /// Mints a short-lived ticket authorizing a single WebSocket connection, so
+  /// the long-lived session token never appears in the `/ws` URL.
+  static const String wsTicket = '$apiBase/auth/ws-ticket';
   static const String youtubeResolve = '$apiBase/youtube/resolve';
   static const String youtubeSuggestions = '$apiBase/youtube/suggestions';
   static const String channels = '$apiBase/channels';
@@ -54,6 +58,11 @@ class AppConstants {
   static String channelUnsubscribe(String id) =>
       '$apiBase/channels/$id/unsubscribe';
   static String videoDetail(String id) => '$apiBase/videos/$id';
+
+  /// Mints a short-lived ticket authorizing playback of [id], used in place of
+  /// the session token on both [videoStream] and [videoPreviewStream] URLs.
+  static String videoPlaybackTicket(String id) =>
+      '$apiBase/videos/$id/playback-ticket';
   static String videoStream(String id) => '$apiBase/videos/$id/stream';
   static String videoProgress(String id) => '$apiBase/videos/$id/progress';
   static String videoDownload(String id) => '$apiBase/videos/$id/download';

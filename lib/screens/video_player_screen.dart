@@ -100,14 +100,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
       // Path 1: HQ complete — play directly
       if (video.status == VideoStatus.complete) {
-        final streamUrl = _api.getVideoStreamUrl(widget.videoId);
+        final streamUrl = await _api.getVideoStreamUrl(widget.videoId);
         await _startPlayback(streamUrl, video);
         return;
       }
 
       // Path 2: Preview already ready — play preview, listen for HQ
       if (video.hasPreviewReady) {
-        final previewUrl = _api.getPreviewStreamUrl(widget.videoId);
+        final previewUrl = await _api.getPreviewStreamUrl(widget.videoId);
         await _startPlayback(previewUrl, video, isPreview: true);
         _listenForHqReady();
         return;
@@ -287,19 +287,32 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       },
     );
 
-    _wsSubscription = wsService.events.listen((event) {
+    _wsSubscription = wsService.events.listen((event) async {
       if (event.type == WebSocketEventType.previewReady &&
           event.data['video_id'] == widget.videoId) {
         _stopWaiting();
-        final previewUrl = _api.getPreviewStreamUrl(widget.videoId);
-        _startPlayback(previewUrl, video, isPreview: true);
-        _listenForHqReady();
+        try {
+          final previewUrl = await _api.getPreviewStreamUrl(widget.videoId);
+          if (!mounted) return;
+          // Fire-and-forget so the HQ listener is registered before the preview
+          // finishes initializing — that's what lets an early HQ-ready event be
+          // picked up via _pendingHqSwitch.
+          _startPlayback(previewUrl, video, isPreview: true);
+          _listenForHqReady();
+        } on ApiException catch (e) {
+          if (mounted) setState(() => _error = e.message);
+        }
       } else if (event.type == WebSocketEventType.downloadComplete &&
           event.data['video_id'] == widget.videoId) {
         // HQ finished before preview — play HQ directly
         _stopWaiting();
-        final streamUrl = _api.getVideoStreamUrl(widget.videoId);
-        _startPlayback(streamUrl, video);
+        try {
+          final streamUrl = await _api.getVideoStreamUrl(widget.videoId);
+          if (!mounted) return;
+          _startPlayback(streamUrl, video);
+        } on ApiException catch (e) {
+          if (mounted) setState(() => _error = e.message);
+        }
       }
     });
   }
@@ -317,14 +330,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         if (!mounted || _isInitialized) return;
         if (latest.status == VideoStatus.complete) {
           _stopWaiting();
-          await _startPlayback(_api.getVideoStreamUrl(widget.videoId), latest);
+          final streamUrl = await _api.getVideoStreamUrl(widget.videoId);
+          await _startPlayback(streamUrl, latest);
         } else if (latest.hasPreviewReady) {
           _stopWaiting();
-          await _startPlayback(
-            _api.getPreviewStreamUrl(widget.videoId),
-            latest,
-            isPreview: true,
-          );
+          final previewUrl = await _api.getPreviewStreamUrl(widget.videoId);
+          await _startPlayback(previewUrl, latest, isPreview: true);
           _listenForHqReady();
         }
       } catch (_) {
@@ -370,7 +381,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     final currentSpeed = _controller!.value.playbackSpeed;
 
     try {
-      final streamUrl = _api.getVideoStreamUrl(widget.videoId);
+      final streamUrl = await _api.getVideoStreamUrl(widget.videoId);
       final hqController = VideoPlayerController.networkUrl(
         Uri.parse(streamUrl),
       );

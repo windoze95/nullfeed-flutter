@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/websocket_service.dart';
 import '../services/storage_service.dart';
 import '../services/offline_service.dart';
+import '../services/api_service.dart';
 import 'auth_provider.dart';
 import 'channel_provider.dart';
 import 'download_progress_provider.dart';
@@ -24,16 +25,20 @@ final webSocketConnectionProvider = Provider<void>((ref) {
     authStateProvider.select((state) => state.currentUser?.id),
   );
   final storage = ref.watch(storageServiceProvider);
+  final apiService = ref.watch(apiServiceProvider);
   final wsService = ref.watch(webSocketServiceProvider);
 
   final serverUrl = storage.getServerUrl();
   final token = storage.getSessionToken();
 
+  // A stored token gates connecting (we must be signed in) but never goes into
+  // the URL — the socket authenticates with a short-lived ticket minted per
+  // connection via [ApiService.getWsTicket].
   if (userId == null || serverUrl == null || token == null) {
     return;
   }
 
-  wsService.connect(serverUrl, userId, token);
+  wsService.connect(serverUrl, userId, apiService.getWsTicket);
 
   final subscription = wsService.events.listen((event) {
     switch (event.type) {

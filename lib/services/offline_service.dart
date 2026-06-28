@@ -72,7 +72,6 @@ class OfflineService {
 
     final dir = await _offlineDir;
     final localPath = '$dir/$videoId.mp4';
-    final url = apiService.getVideoStreamUrl(videoId);
 
     await _box.put(videoId, {
       'video_id': videoId,
@@ -90,6 +89,10 @@ class OfflineService {
     onListChanged?.call();
 
     try {
+      // Mint the ticketed stream URL here (not before the entry is written) so
+      // a failed ticket mint marks the download failed via the catch below
+      // rather than escaping the method and stranding the in-flight guard.
+      final url = await apiService.getVideoStreamUrl(videoId);
       await _dio.download(
         url,
         localPath,
@@ -124,6 +127,10 @@ class OfflineService {
       } else {
         _updateEntry(videoId, {'status': 'failed'});
       }
+    } catch (_) {
+      // Couldn't mint a playback ticket (or any other unexpected error) — mark
+      // the entry failed so the UI can offer a retry.
+      _updateEntry(videoId, {'status': 'failed'});
     } finally {
       _cancelTokens.remove(videoId);
       onProgress?.call(videoId, null);
