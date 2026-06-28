@@ -27,6 +27,11 @@ class ContentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final padding = AdaptiveLayout.contentPadding(context);
+    // Grow the row with the (root-clamped) text scale so card titles keep their
+    // room as Dynamic Type gets larger.
+    final rowHeight =
+        AppConstants.contentRowHeight *
+        MediaQuery.textScalerOf(context).scale(1.0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,7 +41,7 @@ class ContentRow extends StatelessWidget {
           child: Text(title, style: Theme.of(context).textTheme.titleLarge),
         ),
         SizedBox(
-          height: AppConstants.contentRowHeight,
+          height: rowHeight,
           child: errorText != null
               ? _buildError(context, padding)
               : isLoading
