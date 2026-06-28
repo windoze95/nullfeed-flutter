@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/channel.dart';
+import '../models/video.dart';
 import '../providers/feed_provider.dart';
 import '../providers/search_provider.dart';
+import '../widgets/queue_action.dart';
 import '../widgets/video_list_tile.dart';
 import '../config/theme.dart';
 
@@ -55,6 +57,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     invalidateFeedProviders(ref);
   }
 
+  void _showVideoMenu(Video video) {
+    showVideoActionsSheet(
+      context,
+      video: video,
+      onPlay: () => _openVideo(video.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(searchProvider);
@@ -101,6 +111,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         scrollController: _scrollController,
         onRetry: notifier.retry,
         onVideoTap: _openVideo,
+        onVideoMenu: _showVideoMenu,
         onChannelTap: (id) => context.push('/channel/$id'),
       ),
     );
@@ -113,6 +124,7 @@ class _SearchBody extends StatelessWidget {
     required this.scrollController,
     required this.onRetry,
     required this.onVideoTap,
+    required this.onVideoMenu,
     required this.onChannelTap,
   });
 
@@ -120,6 +132,7 @@ class _SearchBody extends StatelessWidget {
   final ScrollController scrollController;
   final VoidCallback onRetry;
   final ValueChanged<String> onVideoTap;
+  final ValueChanged<Video> onVideoMenu;
   final ValueChanged<String> onChannelTap;
 
   @override
@@ -173,6 +186,7 @@ class _SearchBody extends StatelessWidget {
             return VideoListTile(
               video: video,
               onTap: () => onVideoTap(video.id),
+              onMenu: () => onVideoMenu(video),
             );
           }, childCount: state.videos.length),
         ),

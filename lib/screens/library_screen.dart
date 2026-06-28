@@ -150,6 +150,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               backgroundColor: NullFeedTheme.backgroundColor,
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.playlist_play),
+                  tooltip: 'Queue',
+                  onPressed: () => context.push('/queue'),
+                ),
+                IconButton(
                   icon: const Icon(Icons.search),
                   tooltip: 'Search',
                   onPressed: () => context.push('/search'),

@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/video.dart';
+import '../providers/queue_provider.dart';
 import '../providers/websocket_provider.dart';
 import '../services/api_service.dart';
 import '../services/offline_service.dart';
@@ -13,6 +15,7 @@ import '../services/websocket_service.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
 import '../widgets/progress_bar.dart';
+import '../widgets/queue_action.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   final String videoId;
@@ -36,6 +39,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   bool _startingPlayback = false;
   bool _pendingHqSwitch = false;
   bool _progressSavedOnExit = false;
+
+  /// Set once auto-advance has fired so a stream of post-completion ticks can't
+  /// trigger it again.
+  bool _advancing = false;
+
+  /// The loaded video, once known. Backs the Add/Remove-from-Queue control and
+  /// the auto-advance bookkeeping. Null until the metadata fetch lands (it may
+  /// stay null for offline playback when the server is unreachable).
+  Video? _video;
+
   String? _error;
   late final ApiService _api;
   late final OfflineService _offline;
@@ -46,12 +59,23 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     super.initState();
     _api = ref.read(apiServiceProvider);
     _offline = ref.read(offlineServiceProvider);
+    _applyImmersiveMode();
+    // Auto-advance replaces this route with the next player in the same frame,
+    // which disposes the previous player — and its dispose() resets the system
+    // UI to edge-to-edge / all-orientations. Re-assert after the frame so the
+    // incoming player always wins that race.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _applyImmersiveMode();
+    });
+    _initPlayer();
+  }
+
+  void _applyImmersiveMode() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    SystemChrome.setPreferredOrientations([
+    SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _initPlayer();
   }
 
   Future<void> _initPlayer() async {
@@ -113,6 +137,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
 
     _isOfflinePlayback = true;
+    controller.addListener(_onControllerUpdate);
 
     // Prefer the server's resume position (3s budget) but never block
     // playback on the network — fall back to the locally cached position.
@@ -121,6 +146,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       final video = await _api
           .getVideo(widget.videoId)
           .timeout(const Duration(seconds: 3));
+      _video = video;
       resumeSeconds = video.watchPositionSeconds;
     } catch (_) {
       // Offline or slow server — use the local position.
@@ -175,6 +201,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       return;
     }
 
+    controller.addListener(_onControllerUpdate);
+
     // Rewind 10s on resume so user can re-orient
     if (video.watchPositionSeconds > 0) {
       final resumePos = (video.watchPositionSeconds - 10).clamp(
@@ -196,6 +224,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       _controller = controller;
       _isInitialized = true;
       _isPreviewMode = isPreview;
+      _video = video;
     });
     _startingPlayback = false;
     // Playback has started — keep the screen awake until the player closes.
@@ -336,6 +365,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         Uri.parse(streamUrl),
       );
       await hqController.initialize();
+      hqController.addListener(_onControllerUpdate);
       await hqController.seekTo(currentPosition);
       await hqController.setPlaybackSpeed(currentSpeed);
       await hqController.play();
@@ -355,6 +385,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       // with the HQ controller — disposing it synchronously can leave the
       // outgoing VideoPlayer reading a disposed controller mid-frame.
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldController?.removeListener(_onControllerUpdate);
         oldController?.pause();
         oldController?.dispose();
       });
@@ -408,6 +439,52 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
     setState(() => _showControls = true);
     _scheduleHideControls();
+  }
+
+  /// Controller listener that watches for end-of-video to drive queue
+  /// auto-advance. It fires on every value change, so the actual work is
+  /// guarded by [_advancing].
+  void _onControllerUpdate() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    if (controller.value.isCompleted) _handleCompletion();
+  }
+
+  /// When the video plays through to the end, advance into the queue: consume
+  /// the finished video if it was queued, then play the next queued item.
+  /// Stays put when there's nothing to advance to. Only end-of-video reaches
+  /// here — manual back-out ([_navigateBack]) never auto-advances.
+  void _handleCompletion() {
+    if (_advancing) return;
+    _advancing = true;
+
+    final notifier = ref.read(queueProvider.notifier);
+    // Capture the next target before consuming the finished video, so removal
+    // can't shift it out from under us.
+    final nextId = notifier.nextAfter(widget.videoId);
+    final wasQueued = ref.read(queueProvider).isQueued(widget.videoId);
+
+    // Watch-later semantics: a queued video that finishes is consumed.
+    // Fire-and-forget — a failed removal must not block advancing.
+    if (wasQueued) {
+      unawaited(notifier.remove(widget.videoId).catchError((_) {}));
+    }
+
+    if (nextId == null) return; // Nothing queued after this — stay put.
+
+    // Persist the finished video's final position before moving on; the exit
+    // guard stops dispose() saving it a second time.
+    _progressSavedOnExit = true;
+    unawaited(_saveProgress());
+
+    if (!mounted) return;
+    context.pushReplacement('/player/$nextId');
+  }
+
+  void _toggleQueue() {
+    final video = _video;
+    if (video == null) return;
+    unawaited(toggleVideoQueue(context, ref, video));
   }
 
   void _navigateBack() {
@@ -497,6 +574,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         );
       }
     }
+    controller?.removeListener(_onControllerUpdate);
     controller?.pause();
     controller?.dispose();
     // Re-allow the screen to sleep now that playback is over.
@@ -508,6 +586,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final video = _video;
+    // Drives the Add/Remove-from-Queue control; null hides it until the video
+    // metadata is known.
+    final isQueued = video == null
+        ? null
+        : ref.watch(queueProvider.select((s) => s.isQueued(video.id)));
     return Focus(
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
@@ -637,6 +721,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   onSeekRelative: _seekRelative,
                   onPlayPause: _togglePlayPause,
                   onInteraction: _scheduleHideControls,
+                  isQueued: isQueued,
+                  onToggleQueue: video == null ? null : _toggleQueue,
                 ),
             ],
           ),
@@ -653,12 +739,19 @@ class _ControlsOverlay extends StatelessWidget {
   final VoidCallback onPlayPause;
   final VoidCallback onInteraction;
 
+  /// Whether the current video is in the watch-later queue. Null hides the
+  /// queue control (the video isn't known yet).
+  final bool? isQueued;
+  final VoidCallback? onToggleQueue;
+
   const _ControlsOverlay({
     required this.controller,
     required this.onBack,
     required this.onSeekRelative,
     required this.onPlayPause,
     required this.onInteraction,
+    this.isQueued,
+    this.onToggleQueue,
   });
 
   @override
@@ -691,6 +784,22 @@ class _ControlsOverlay extends StatelessWidget {
                     onPressed: onBack,
                   ),
                   const Spacer(),
+                  if (onToggleQueue != null)
+                    IconButton(
+                      icon: Icon(
+                        (isQueued ?? false)
+                            ? Icons.playlist_add_check
+                            : Icons.playlist_add,
+                        color: Colors.white,
+                      ),
+                      tooltip: (isQueued ?? false)
+                          ? 'Remove from Queue'
+                          : 'Add to Queue',
+                      onPressed: () {
+                        onToggleQueue!();
+                        onInteraction();
+                      },
+                    ),
                   _SpeedButton(
                     controller: controller,
                     onInteraction: onInteraction,
