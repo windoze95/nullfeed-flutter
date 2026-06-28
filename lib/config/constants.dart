@@ -63,6 +63,11 @@ class AppConstants {
   static const int skipForwardSeconds = 10;
   static const int skipBackwardSeconds = 10;
 
+  /// How long to wait for a server-side preview/HQ render before giving up and
+  /// showing a graceful "taking longer than expected" message instead of an
+  /// indefinite spinner.
+  static const int previewMaxWaitSeconds = 180;
+
   // UI
   static const double cardAspectRatio = 16 / 9;
   static const double channelCardWidth = 280.0;
