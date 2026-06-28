@@ -133,30 +133,38 @@ void main() {
       },
     );
 
-    test('stream and preview URLs share one playback ticket', () async {
-      var n = 0;
-      final adapter = _FakeAdapter(
-        (_) => _json({'ticket': 'pt-${++n}', 'expires_in': 300}),
-      );
-      final api = apiWith(adapter);
+    test(
+      'stream, instant, and preview URLs share one playback ticket',
+      () async {
+        var n = 0;
+        final adapter = _FakeAdapter(
+          (_) => _json({'ticket': 'pt-${++n}', 'expires_in': 300}),
+        );
+        final api = apiWith(adapter);
 
-      final streamUrl = await api.getVideoStreamUrl('vid-3');
-      final previewUrl = await api.getPreviewStreamUrl('vid-3');
+        final streamUrl = await api.getVideoStreamUrl('vid-3');
+        final instantUrl = await api.getInstantStreamUrl('vid-3');
+        final previewUrl = await api.getPreviewStreamUrl('vid-3');
 
-      expect(
-        streamUrl,
-        endsWith('${AppConstants.videoStream('vid-3')}?ticket=pt-1'),
-      );
-      expect(
-        previewUrl,
-        endsWith('${AppConstants.videoPreviewStream('vid-3')}?ticket=pt-1'),
-      );
-      expect(
-        postsTo(adapter, (p) => p.endsWith('/playback-ticket')),
-        1,
-        reason: 'one ticket authorizes both stream and preview',
-      );
-    });
+        expect(
+          streamUrl,
+          endsWith('${AppConstants.videoStream('vid-3')}?ticket=pt-1'),
+        );
+        expect(
+          instantUrl,
+          endsWith('${AppConstants.videoInstantStream('vid-3')}?ticket=pt-1'),
+        );
+        expect(
+          previewUrl,
+          endsWith('${AppConstants.videoPreviewStream('vid-3')}?ticket=pt-1'),
+        );
+        expect(
+          postsTo(adapter, (p) => p.endsWith('/playback-ticket')),
+          1,
+          reason: 'one ticket authorizes stream, instant, and preview',
+        );
+      },
+    );
 
     test('surfaces an ApiException when the ticket mint fails', () async {
       final adapter = _FakeAdapter(
