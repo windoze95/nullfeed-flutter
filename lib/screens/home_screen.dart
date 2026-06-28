@@ -254,8 +254,7 @@ class _RecommendedForYouRail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final recs =
-        ref.watch(discoverProvider).value ?? const <Recommendation>[];
+    final recs = ref.watch(discoverProvider).value ?? const <Recommendation>[];
     if (recs.isEmpty) return const SizedBox.shrink();
 
     return Column(
