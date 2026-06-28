@@ -4,6 +4,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:nullfeed/providers/auth_provider.dart';
 import 'package:nullfeed/providers/websocket_provider.dart';
 import 'package:nullfeed/services/api_service.dart';
+import 'package:nullfeed/services/push_service.dart';
 import 'package:nullfeed/services/storage_service.dart';
 
 import '../helpers/test_helpers.dart';
@@ -12,15 +13,21 @@ void main() {
   late MockApiService api;
   late MockStorageService storage;
   late MockWebSocketService webSocket;
+  late MockPushService push;
 
   setUp(() {
     api = MockApiService();
     storage = MockStorageService();
     webSocket = MockWebSocketService();
+    push = MockPushService();
     when(() => storage.getSessionToken()).thenReturn(null);
     when(() => storage.setSelectedUserId(any())).thenAnswer((_) async {});
     when(() => storage.setSessionToken(any())).thenAnswer((_) async {});
     when(() => storage.clearSession()).thenAnswer((_) async {});
+    when(() => push.registerForPush()).thenAnswer((_) async {});
+    when(() => push.registerIfAuthorized()).thenAnswer((_) async {});
+    when(() => push.handleInitialNotification()).thenAnswer((_) async {});
+    when(() => push.unregister()).thenAnswer((_) async {});
   });
 
   ProviderContainer createContainer() {
@@ -29,6 +36,7 @@ void main() {
         apiServiceProvider.overrideWithValue(api),
         storageServiceProvider.overrideWithValue(storage),
         webSocketServiceProvider.overrideWithValue(webSocket),
+        pushServiceProvider.overrideWithValue(push),
       ],
     );
     addTearDown(container.dispose);
@@ -65,6 +73,9 @@ void main() {
       expect(state.restoreFailed, isFalse);
       // Restore must not re-select (which would bypass PIN protection).
       verifyNever(() => api.selectProfile(any(), pin: any(named: 'pin')));
+      // Silent restore refreshes the token without prompting.
+      verify(() => push.registerIfAuthorized()).called(1);
+      verifyNever(() => push.registerForPush());
     });
 
     test('clears the session when the token is rejected with 401', () async {
@@ -178,6 +189,8 @@ void main() {
       expect(state.error, isNull);
       verify(() => storage.setSelectedUserId('u2')).called(1);
       verify(() => storage.setSessionToken('tok-2')).called(1);
+      // An interactive sign-in requests permission and registers for push.
+      verify(() => push.registerForPush()).called(1);
     });
 
     test(
@@ -283,6 +296,8 @@ void main() {
       verify(() => api.logout()).called(1);
       verify(() => webSocket.disconnect()).called(1);
       verify(() => storage.clearSession()).called(1);
+      // Sign-out drops this device's push registration.
+      verify(() => push.unregister()).called(1);
     });
 
     test('still signs out locally when the server logout fails', () async {
@@ -326,6 +341,7 @@ void main() {
       expect(state.profiles, hasLength(1), reason: 'profiles are kept');
       verify(() => webSocket.disconnect()).called(1);
       verify(() => storage.clearSession()).called(1);
+      verify(() => push.unregister()).called(1);
     });
 
     test('is a no-op when nobody is signed in', () {

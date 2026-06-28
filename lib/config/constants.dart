@@ -21,6 +21,12 @@ class AppConstants {
   static const String preferredQualityKey = 'preferred_quality';
   static const String autoOfflineChannelsKey = 'auto_offline_channels';
 
+  /// Stable per-install identifier sent with the APNs token so the backend can
+  /// upsert (and later remove) this device's push registration. Lives in the
+  /// settings box so it survives sign-out — it identifies the device, not the
+  /// session.
+  static const String deviceIdKey = 'device_id';
+
   // API paths
   static const String apiBase = '/api';
   static const String authProfiles = '$apiBase/auth/profiles';
@@ -48,6 +54,11 @@ class AppConstants {
   static const String discover = '$apiBase/discover';
   static const String discoverRefresh = '$apiBase/discover/refresh';
   static const String health = '$apiBase/health';
+
+  /// Registers (POST) or removes (DELETE) this device's APNs push token. Auth
+  /// is the usual `X-User-Token` header, so the registration is scoped to the
+  /// signed-in profile.
+  static const String pushRegister = '$apiBase/push/register';
 
   static String authProfile(String id) => '$apiBase/auth/profiles/$id';
   static String channelDetail(String id) => '$apiBase/channels/$id';

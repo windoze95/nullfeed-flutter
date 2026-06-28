@@ -595,6 +595,39 @@ class ApiService {
     await _dio.post('$_baseUrl${AppConstants.discoverRefresh}');
   });
 
+  // Push notifications
+
+  /// Registers this device's APNs [token] with the backend so the signed-in
+  /// profile receives push notifications. The session is identified by the
+  /// usual `X-User-Token` header. Returns true when the backend stored the
+  /// token; false when push is disabled server-side (`{"enabled": false}`),
+  /// which is a benign no-op rather than an error.
+  Future<bool> registerPushToken({
+    required String token,
+    required String deviceId,
+    String platform = 'ios',
+  }) => _guard(() async {
+    final response = await _dio.post(
+      '$_baseUrl${AppConstants.pushRegister}',
+      data: {
+        'device_token': token,
+        'device_id': deviceId,
+        'platform': platform,
+      },
+    );
+    final data = response.data;
+    if (data is Map && data['enabled'] == false) return false;
+    return data is Map && data['registered'] == true;
+  });
+
+  /// Removes this device's push token from the backend (e.g. on sign-out).
+  Future<void> unregisterPushToken(String deviceId) => _guard(() async {
+    await _dio.delete(
+      '$_baseUrl${AppConstants.pushRegister}',
+      data: {'device_id': deviceId},
+    );
+  });
+
   // Health
   Future<bool> checkHealth() async {
     try {

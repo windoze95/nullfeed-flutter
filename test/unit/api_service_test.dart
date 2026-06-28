@@ -188,4 +188,47 @@ void main() {
       expect(postsTo(adapter, (p) => p == AppConstants.wsTicket), 1);
     });
   });
+
+  group('push token registration', () {
+    test('POSTs the device token, id and platform, returns true', () async {
+      final adapter = _FakeAdapter(
+        (_) => _json({'enabled': true, 'registered': true}),
+      );
+      final api = apiWith(adapter);
+
+      final ok = await api.registerPushToken(token: 'tok', deviceId: 'dev-1');
+
+      expect(ok, isTrue);
+      final req = adapter.requests.single;
+      expect(req.method, 'POST');
+      expect(req.uri.path, AppConstants.pushRegister);
+      expect(req.data, {
+        'device_token': 'tok',
+        'device_id': 'dev-1',
+        'platform': 'ios',
+      });
+    });
+
+    test('returns false when push is disabled server-side', () async {
+      final adapter = _FakeAdapter((_) => _json({'enabled': false}));
+      final api = apiWith(adapter);
+
+      expect(
+        await api.registerPushToken(token: 'tok', deviceId: 'dev-1'),
+        isFalse,
+      );
+    });
+
+    test('unregister DELETEs the device id', () async {
+      final adapter = _FakeAdapter((_) => _json({}));
+      final api = apiWith(adapter);
+
+      await api.unregisterPushToken('dev-1');
+
+      final req = adapter.requests.single;
+      expect(req.method, 'DELETE');
+      expect(req.uri.path, AppConstants.pushRegister);
+      expect(req.data, {'device_id': 'dev-1'});
+    });
+  });
 }
