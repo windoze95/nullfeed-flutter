@@ -10,6 +10,7 @@ import '../config/constants.dart';
 import '../providers/feed_provider.dart';
 import '../providers/offline_provider.dart';
 import 'progress_bar.dart';
+import 'queue_action.dart';
 
 class VideoCard extends ConsumerStatefulWidget {
   final Video video;
@@ -64,6 +65,18 @@ class _VideoCardState extends ConsumerState<VideoCard> {
     context.push('/channel/${channel.id}');
   }
 
+  /// Long-press actions: play, toggle the watch-later queue, and (when known)
+  /// jump to the channel.
+  void _showMenu() {
+    HapticFeedback.selectionClick();
+    showVideoActionsSheet(
+      context,
+      video: widget.video,
+      onPlay: _onActivate,
+      onOpenChannel: widget.channel != null ? _openChannel : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const cardWidth = AppConstants.videoCardWidth;
@@ -85,10 +98,12 @@ class _VideoCardState extends ConsumerState<VideoCard> {
               label: _semanticLabel(offlineStatus),
               excludeSemantics: true,
               onTap: _onActivate,
+              onLongPress: _showMenu,
               child: Material(
                 type: MaterialType.transparency,
                 child: InkWell(
                   onTap: _onActivate,
+                  onLongPress: _showMenu,
                   onTapDown: (_) => setState(() => _isPressed = true),
                   onTapUp: (_) => setState(() => _isPressed = false),
                   onTapCancel: () => setState(() => _isPressed = false),

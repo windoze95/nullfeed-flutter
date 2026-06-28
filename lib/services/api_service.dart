@@ -443,6 +443,33 @@ class ApiService {
         .toList();
   });
 
+  // Queue (watch-later)
+
+  /// Adds [videoId] to the caller's watch-later queue. Idempotent server-side,
+  /// so re-adding an already-queued video is a no-op rather than an error.
+  Future<void> addToQueue(String videoId) => _guard(() async {
+    await _dio.post('$_baseUrl${AppConstants.videoQueue(videoId)}');
+  });
+
+  /// Removes [videoId] from the queue. Idempotent — removing something that
+  /// isn't queued succeeds.
+  Future<void> removeFromQueue(String videoId) => _guard(() async {
+    await _dio.delete('$_baseUrl${AppConstants.videoQueue(videoId)}');
+  });
+
+  /// One page of the ordered watch-later queue. Uses the same cursor envelope
+  /// as [searchVideos]: pass [VideoPage.nextCursor] back as [cursor] for the
+  /// next page (null = last page). [items] are in play order, front first.
+  Future<VideoPage> getQueue({String? cursor, int limit = 20}) => _guard(
+    () async {
+      final response = await _dio.get(
+        '$_baseUrl${AppConstants.queue}',
+        queryParameters: {if (cursor != null) 'cursor': cursor, 'limit': limit},
+      );
+      return VideoPage.fromJson(response.data as Map<String, dynamic>);
+    },
+  );
+
   // Feed
 
   /// Unified home feed: continue-watching, new-episodes and recently-added in

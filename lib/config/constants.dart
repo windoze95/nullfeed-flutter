@@ -36,6 +36,7 @@ class AppConstants {
   static const String channelPollAll = '$apiBase/channels/poll';
   static const String videos = '$apiBase/videos';
   static const String activeDownloads = '$apiBase/videos/downloads';
+  static const String queue = '$apiBase/queue';
   static const String feedHome = '$apiBase/feed/home';
   static const String feedContinueWatching = '$apiBase/feed/continue-watching';
   static const String feedNewEpisodes = '$apiBase/feed/new-episodes';
@@ -60,6 +61,7 @@ class AppConstants {
   static String videoPreview(String id) => '$apiBase/videos/$id/preview';
   static String videoPreviewStream(String id) =>
       '$apiBase/videos/$id/preview-stream';
+  static String videoQueue(String id) => '$apiBase/videos/$id/queue';
   static String discoverDismiss(String id) => '$apiBase/discover/$id/dismiss';
   static String websocket(String userId) => '/ws/$userId';
 

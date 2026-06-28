@@ -11,6 +11,7 @@ import '../providers/feed_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/queue_action.dart';
 import '../widgets/video_list_tile.dart';
 import '../widgets/adaptive_layout.dart';
 import '../config/theme.dart';
@@ -479,6 +480,10 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: NullFeedTheme.textMuted),
               ),
+            ),
+            QueueActionTile(
+              video: video,
+              onTap: () => Navigator.pop(sheetContext),
             ),
             if (video.status == VideoStatus.complete)
               ListTile(
