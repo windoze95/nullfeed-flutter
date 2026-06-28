@@ -40,6 +40,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   bool _pendingHqSwitch = false;
   bool _progressSavedOnExit = false;
 
+  /// When playback resumed from a saved position, the position (in seconds) the
+  /// viewer left off at — surfaced in the dismissible "Resuming at …" banner so
+  /// they can jump back to the start. Null when starting from the top.
+  int? _resumeFromSeconds;
+  bool _showResumeBanner = false;
+  Timer? _resumeBannerTimer;
+
   /// Set once auto-advance has fired so a stream of post-completion ticks can't
   /// trigger it again.
   bool _advancing = false;
@@ -142,22 +149,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     // Prefer the server's resume position (3s budget) but never block
     // playback on the network — fall back to the locally cached position.
     var resumeSeconds = _offline.getWatchPosition(widget.videoId);
+    var fullyWatched = false;
     try {
       final video = await _api
           .getVideo(widget.videoId)
           .timeout(const Duration(seconds: 3));
       _video = video;
       resumeSeconds = video.watchPositionSeconds;
+      fullyWatched = video.isWatched;
     } catch (_) {
       // Offline or slow server — use the local position.
     }
 
-    if (resumeSeconds > 0) {
-      final resumePos = (resumeSeconds - 10).clamp(
-        0,
-        controller.value.duration.inSeconds,
-      );
+    // Resume from the saved spot unless it's been fully watched (then start
+    // over). A rewind gives the viewer a moment of context.
+    if (resumeSeconds > 0 && !fullyWatched) {
+      final resumePos = (resumeSeconds - AppConstants.skipBackwardSeconds)
+          .clamp(0, controller.value.duration.inSeconds);
       await controller.seekTo(Duration(seconds: resumePos));
+      _resumeFromSeconds = resumeSeconds;
     }
 
     await controller.play();
@@ -174,6 +184,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     // Playback has started — keep the screen awake until the player closes.
     unawaited(WakelockPlus.enable());
 
+    _maybeShowResumeBanner();
     _startProgressTimer();
     _scheduleHideControls();
   }
@@ -203,13 +214,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
     controller.addListener(_onControllerUpdate);
 
-    // Rewind 10s on resume so user can re-orient
-    if (video.watchPositionSeconds > 0) {
-      final resumePos = (video.watchPositionSeconds - 10).clamp(
-        0,
-        video.durationSeconds,
-      );
-      await controller.seekTo(Duration(seconds: resumePos));
+    // Resume from where the viewer left off (rewound a little so they can
+    // re-orient). A fresh or fully-watched video starts from the top.
+    if (video.canResume) {
+      await controller.seekTo(Duration(seconds: video.resumeSeekSeconds));
+      _resumeFromSeconds = video.watchPositionSeconds;
     }
 
     await controller.play();
@@ -236,6 +245,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       unawaited(_switchToHq());
     }
 
+    _maybeShowResumeBanner();
     _startProgressTimer();
     _scheduleHideControls();
   }
@@ -428,6 +438,35 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     if (_showControls) _scheduleHideControls();
   }
 
+  /// Surfaces the dismissible "Resuming at …" banner when playback picked up
+  /// from a saved position. Auto-hides after a few seconds; [_restartFromStart]
+  /// and [_dismissResumeBanner] retire it early.
+  void _maybeShowResumeBanner() {
+    if (_resumeFromSeconds == null) return;
+    setState(() => _showResumeBanner = true);
+    _resumeBannerTimer?.cancel();
+    _resumeBannerTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _showResumeBanner = false);
+    });
+  }
+
+  /// Abandons the resumed position and plays from the top. Reached from the
+  /// banner's "Start over" action.
+  void _restartFromStart() {
+    _resumeBannerTimer?.cancel();
+    _controller?.seekTo(Duration.zero);
+    setState(() {
+      _showResumeBanner = false;
+      _showControls = true;
+    });
+    _scheduleHideControls();
+  }
+
+  void _dismissResumeBanner() {
+    _resumeBannerTimer?.cancel();
+    setState(() => _showResumeBanner = false);
+  }
+
   void _togglePlayPause() {
     if (_controller == null) return;
     if (_controller!.value.isPlaying) {
@@ -550,6 +589,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _wsSubscription?.cancel();
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
+    _resumeBannerTimer?.cancel();
     _previewTimeout?.cancel();
     _previewPollTimer?.cancel();
     _previewMaxWait?.cancel();
@@ -724,8 +764,97 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   isQueued: isQueued,
                   onToggleQueue: video == null ? null : _toggleQueue,
                 ),
+
+              // Resume affordance: playback auto-resumed from a saved position
+              // (possibly set on another device) — offer a one-tap jump back to
+              // the start. Sits above the controls so it stays tappable, and
+              // clear of the back button / preview badge at the top corners.
+              if (_showResumeBanner &&
+                  _isInitialized &&
+                  _resumeFromSeconds != null)
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    child: Center(
+                      child: _ResumeBanner(
+                        position: Duration(seconds: _resumeFromSeconds!),
+                        onRestart: _restartFromStart,
+                        onDismiss: _dismissResumeBanner,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Formats a playback timestamp as M:SS, or H:MM:SS once it crosses an hour.
+String _formatTimestamp(Duration d) {
+  final hours = d.inHours;
+  final minutes = d.inMinutes.remainder(60);
+  final seconds = d.inSeconds.remainder(60);
+  if (hours > 0) {
+    return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+  return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
+/// Brief, dismissible banner shown when playback auto-resumed from a saved
+/// position (which may have been set on another device). Reports where the
+/// viewer left off and offers a one-tap jump back to the start; a close button
+/// dismisses it, and the player also auto-hides it on a timer.
+class _ResumeBanner extends StatelessWidget {
+  final Duration position;
+  final VoidCallback onRestart;
+  final VoidCallback onDismiss;
+
+  const _ResumeBanner({
+    required this.position,
+    required this.onRestart,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.only(left: 16, right: 4),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.history, color: Colors.white70, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'Resuming at ${_formatTimestamp(position)}',
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onRestart,
+              style: TextButton.styleFrom(
+                foregroundColor: NullFeedTheme.primaryColor,
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: const Text('Start over'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+              tooltip: 'Dismiss',
+              onPressed: onDismiss,
+            ),
+          ],
         ),
       ),
     );
@@ -885,8 +1014,8 @@ class _ControlsOverlay extends StatelessWidget {
                             milliseconds: (fraction * duration.inMilliseconds)
                                 .round(),
                           );
-                          return '${_formatDuration(at)} of '
-                              '${_formatDuration(duration)}';
+                          return '${_formatTimestamp(at)} of '
+                              '${_formatTimestamp(duration)}';
                         },
                         onSeek: (fraction) {
                           final target = Duration(
@@ -902,14 +1031,14 @@ class _ControlsOverlay extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            _formatDuration(position),
+                            _formatTimestamp(position),
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
                             ),
                           ),
                           Text(
-                            _formatDuration(duration),
+                            _formatTimestamp(duration),
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
@@ -926,16 +1055,6 @@ class _ControlsOverlay extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatDuration(Duration d) {
-    final hours = d.inHours;
-    final minutes = d.inMinutes.remainder(60);
-    final seconds = d.inSeconds.remainder(60);
-    if (hours > 0) {
-      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-    }
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
 

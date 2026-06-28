@@ -206,6 +206,42 @@ void main() {
     });
   });
 
+  group('Video resume', () {
+    Video at(int position, {bool isWatched = false, int duration = 600}) =>
+        Video(
+          id: 'v1',
+          youtubeVideoId: 'yt1',
+          channelId: 'c1',
+          title: 'A Video',
+          durationSeconds: duration,
+          watchPositionSeconds: position,
+          isWatched: isWatched,
+        );
+
+    test('canResume only for a partially-watched video', () {
+      expect(at(0).canResume, isFalse); // fresh — start from the top
+      expect(at(120).canResume, isTrue); // left off mid-video
+      expect(at(120, isWatched: true).canResume, isFalse); // finished — replay
+    });
+
+    test('resumeSeekSeconds rewinds a few seconds for context', () {
+      expect(at(120).resumeSeekSeconds, 110);
+    });
+
+    test('resumeSeekSeconds never goes negative', () {
+      expect(at(5).resumeSeekSeconds, 0);
+    });
+
+    test('resumeSeekSeconds is clamped to the duration', () {
+      expect(at(600, duration: 600).resumeSeekSeconds, 590);
+    });
+
+    test('resumeSeekSeconds falls back to the position when duration is '
+        'unknown', () {
+      expect(at(120, duration: 0).resumeSeekSeconds, 110);
+    });
+  });
+
   group('HomeFeed', () {
     Map<String, dynamic> feedItem(String videoId) => {
       'channel': {
