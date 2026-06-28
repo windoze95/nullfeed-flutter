@@ -79,6 +79,23 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// A short-lived access ticket and the instant it should be treated as stale.
+/// Tickets stand in for the long-lived session token on media and WebSocket
+/// URLs so the token never leaks into them. A small safety margin is folded
+/// into [_staleAt] so a ticket is refreshed shortly before it actually expires
+/// rather than handed out already about to die.
+class _CachedTicket {
+  _CachedTicket(this.value, Duration ttl)
+    : _staleAt = DateTime.now().add(ttl - _refreshMargin);
+
+  static const _refreshMargin = Duration(seconds: 30);
+
+  final String value;
+  final DateTime _staleAt;
+
+  bool get isFresh => DateTime.now().isBefore(_staleAt);
+}
+
 class ApiService {
   final StorageService storage;
 
@@ -90,14 +107,23 @@ class ApiService {
 
   late final Dio _dio;
 
-  ApiService({required this.storage}) {
-    _dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {'Content-Type': 'application/json'},
-      ),
-    );
+  /// Cached short-lived ticket for opening the WebSocket. See [getWsTicket].
+  _CachedTicket? _wsTicket;
+
+  /// Cached playback ticket and the video it authorizes. A request for a
+  /// different video — or a ticket that's gone stale — triggers a refetch.
+  /// See [getPlaybackTicket].
+  String? _playbackTicketVideoId;
+  _CachedTicket? _playbackTicket;
+
+  /// [dio] is injectable so tests can supply a mock HTTP adapter; production
+  /// callers let it default and the interceptors/timeouts below are applied
+  /// either way.
+  ApiService({required this.storage, Dio? dio}) {
+    _dio = dio ?? Dio();
+    _dio.options.connectTimeout = const Duration(seconds: 10);
+    _dio.options.receiveTimeout = const Duration(seconds: 30);
+    _dio.options.headers['Content-Type'] = 'application/json';
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -201,6 +227,28 @@ class ApiService {
       options: _withToken(tokenOverride),
     );
   });
+
+  /// Mints (or returns a still-fresh cached) short-lived ticket for opening the
+  /// WebSocket, used in place of the session token in the `/ws` URL. The cache
+  /// keeps reconnects from minting a fresh ticket on every attempt; a stale one
+  /// is refetched automatically. Throws [ApiException] if minting fails.
+  Future<String> getWsTicket() => _guard(() async {
+    final cached = _wsTicket;
+    if (cached != null && cached.isFresh) return cached.value;
+    final response = await _dio.post('$_baseUrl${AppConstants.wsTicket}');
+    final parsed = _parseTicket(response.data);
+    _wsTicket = _CachedTicket(parsed.value, parsed.ttl);
+    return parsed.value;
+  });
+
+  /// Parses a `{ "ticket": ..., "expires_in": <seconds> }` envelope, defaulting
+  /// to a 5-minute TTL when the server omits `expires_in`.
+  ({String value, Duration ttl}) _parseTicket(Object? data) {
+    final map = data as Map<String, dynamic>;
+    final value = map['ticket'] as String;
+    final expiresIn = (map['expires_in'] as num?)?.toInt() ?? 300;
+    return (value: value, ttl: Duration(seconds: expiresIn));
+  }
 
   Future<User> updateProfile(
     String userId, {
@@ -364,10 +412,31 @@ class ApiService {
     return Video.fromJson(response.data as Map<String, dynamic>);
   });
 
-  String getVideoStreamUrl(String id) {
-    final token = storage.getSessionToken();
-    final base = '$_baseUrl${AppConstants.videoStream(id)}';
-    return token != null ? '$base?token=$token' : base;
+  /// Mints (or returns a still-fresh cached) short-lived playback ticket for
+  /// [videoId]. The ticket authorizes both the `/stream` and `/preview-stream`
+  /// URLs, so the long-lived session token never leaks into a media URL.
+  /// Switching to a different video refetches. Throws [ApiException] on
+  /// failure.
+  Future<String> getPlaybackTicket(String videoId) => _guard(() async {
+    final cached = _playbackTicket;
+    if (cached != null && cached.isFresh && _playbackTicketVideoId == videoId) {
+      return cached.value;
+    }
+    final response = await _dio.post(
+      '$_baseUrl${AppConstants.videoPlaybackTicket(videoId)}',
+    );
+    final parsed = _parseTicket(response.data);
+    _playbackTicketVideoId = videoId;
+    _playbackTicket = _CachedTicket(parsed.value, parsed.ttl);
+    return parsed.value;
+  });
+
+  /// Builds the authenticated HQ stream URL for [id], carrying a short-lived
+  /// playback ticket (`?ticket=`) rather than the session token. Throws
+  /// [ApiException] if the ticket can't be minted.
+  Future<String> getVideoStreamUrl(String id) async {
+    final ticket = await getPlaybackTicket(id);
+    return '$_baseUrl${AppConstants.videoStream(id)}?ticket=$ticket';
   }
 
   Future<void> updateProgress(String videoId, int positionSeconds) =>
@@ -398,10 +467,12 @@ class ApiService {
     await _dio.post('$_baseUrl${AppConstants.videoPreview(videoId)}');
   });
 
-  String getPreviewStreamUrl(String id) {
-    final token = storage.getSessionToken();
-    final base = '$_baseUrl${AppConstants.videoPreviewStream(id)}';
-    return token != null ? '$base?token=$token' : base;
+  /// Builds the authenticated 360p preview stream URL for [id]. Like
+  /// [getVideoStreamUrl] it carries a short-lived playback ticket rather than
+  /// the session token. Throws [ApiException] if the ticket can't be minted.
+  Future<String> getPreviewStreamUrl(String id) async {
+    final ticket = await getPlaybackTicket(id);
+    return '$_baseUrl${AppConstants.videoPreviewStream(id)}?ticket=$ticket';
   }
 
   // Search

@@ -38,6 +38,11 @@ class WebSocketEvent {
 /// Creates a [WebSocketChannel] for [uri]. Injectable for tests.
 typedef WebSocketChannelFactory = WebSocketChannel Function(Uri uri);
 
+/// Mints a fresh, short-lived ticket authorizing one WebSocket connection.
+/// Called on every (re)connect so the socket carries a ticket — never the
+/// long-lived session token — and a stale ticket is refreshed transparently.
+typedef WsTicketFetcher = Future<String> Function();
+
 class WebSocketService {
   WebSocketService({WebSocketChannelFactory? channelFactory})
     : _channelFactory = channelFactory ?? WebSocketChannel.connect;
@@ -52,16 +57,29 @@ class WebSocketService {
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
   Timer? _reconnectTimer;
-  Uri? _uri;
+
+  /// Socket URL without the auth query; the ticket is appended fresh on every
+  /// [_open] so an expired ticket never sticks. Null when there's no target.
+  String? _wsUrl;
+  WsTicketFetcher? _ticketFetcher;
+
   bool _intentionalClose = false;
   bool _disposed = false;
   int _retryCount = 0;
 
+  /// Bumped by every [connect]/[disconnect] so an in-flight async [_open] from
+  /// a superseded connection notices it's stale and bails instead of clobbering
+  /// the current channel after its ticket fetch resolves.
+  int _generation = 0;
+
   Stream<WebSocketEvent> get events => _eventController.stream;
   bool get isConnected => _channel != null;
 
-  /// Opens (or re-opens) the socket for [userId], authenticating with [token].
-  void connect(String serverUrl, String userId, String token) {
+  /// Opens (or re-opens) the socket for [userId]. [ticketFetcher] mints a
+  /// short-lived access ticket; it's invoked on every connect and reconnect so
+  /// the long-lived session token never appears in the URL and an expired
+  /// ticket is refreshed automatically.
+  void connect(String serverUrl, String userId, WsTicketFetcher ticketFetcher) {
     if (_disposed) return;
     disconnect();
     _intentionalClose = false;
@@ -69,15 +87,36 @@ class WebSocketService {
     final host = serverUrl
         .replaceFirst('https://', '')
         .replaceFirst('http://', '');
-    _uri = Uri.parse('$wsScheme://$host/ws/$userId?token=$token');
+    _wsUrl = '$wsScheme://$host/ws/$userId';
+    _ticketFetcher = ticketFetcher;
     _retryCount = 0;
     _open();
   }
 
-  void _open() {
-    if (_disposed || _intentionalClose || _uri == null) return;
+  Future<void> _open() async {
+    if (_disposed || _intentionalClose) return;
+    final wsUrl = _wsUrl;
+    final fetcher = _ticketFetcher;
+    if (wsUrl == null || fetcher == null) return;
+
+    // Capture the generation before the async gap so a connect()/disconnect()
+    // that lands while we await the ticket can be detected below.
+    final generation = _generation;
+    final String ticket;
     try {
-      final channel = _channelFactory(_uri!);
+      ticket = await fetcher();
+    } catch (_) {
+      // Couldn't mint a ticket (offline, or the session is gone). Retry with
+      // backoff rather than hanging; a genuinely dead session is torn down by
+      // the global 401 handler when other requests fail.
+      if (generation == _generation) _scheduleReconnect();
+      return;
+    }
+    // A newer connect()/disconnect() superseded this attempt mid-fetch.
+    if (generation != _generation || _disposed || _intentionalClose) return;
+
+    try {
+      final channel = _channelFactory(Uri.parse('$wsUrl?ticket=$ticket'));
       _channel = channel;
       _subscription = channel.stream.listen(
         (message) {
@@ -94,8 +133,10 @@ class WebSocketService {
         },
         onError: (Object _) => _scheduleReconnect(),
         onDone: () {
-          // 4401 = server rejected the token; retrying with the same
-          // credentials can never succeed. Wait for the next connect().
+          // 4401 = server rejected the ticket at the handshake. We just minted
+          // a fresh one, so a reject means the underlying session is dead, not
+          // a stale ticket — reconnecting can't help. Wait for the next
+          // connect() (which the global 401 sign-out flow triggers).
           if (_channel?.closeCode == 4401) {
             disconnect();
             return;
@@ -132,13 +173,16 @@ class WebSocketService {
   /// next explicit [connect] call.
   void disconnect() {
     _intentionalClose = true;
+    // Invalidate any in-flight _open() still awaiting a ticket.
+    _generation++;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _subscription?.cancel();
     _subscription = null;
     _channel?.sink.close();
     _channel = null;
-    _uri = null;
+    _wsUrl = null;
+    _ticketFetcher = null;
     _retryCount = 0;
   }
 
