@@ -472,6 +472,14 @@ class ApiService {
     await _dio.post('$_baseUrl${AppConstants.videoCancel(videoId)}');
   });
 
+  /// Records an evictable cache claim on [videoId] and (server-side) kicks off
+  /// its HQ download, without it showing in the Downloads tab. Called when the
+  /// user starts instant playback of a not-yet-downloaded video so the player
+  /// can swap up to HQ. Best-effort and idempotent.
+  Future<void> cacheVideo(String videoId) => _guard(() async {
+    await _dio.post('$_baseUrl${AppConstants.videoCache(videoId)}');
+  });
+
   Future<void> requestPreview(String videoId) => _guard(() async {
     await _dio.post('$_baseUrl${AppConstants.videoPreview(videoId)}');
   });

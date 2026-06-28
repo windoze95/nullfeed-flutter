@@ -179,6 +179,19 @@ void main() {
     });
   });
 
+  group('cacheVideo', () {
+    test('POSTs the cache endpoint', () async {
+      final adapter = _FakeAdapter((_) => _json({'status': 'PENDING'}));
+      final api = apiWith(adapter);
+
+      await api.cacheVideo('vid-9');
+
+      final req = adapter.requests.single;
+      expect(req.method, 'POST');
+      expect(req.uri.path, AppConstants.videoCache('vid-9'));
+    });
+  });
+
   group('getWsTicket', () {
     test('POSTs the ws-ticket endpoint and caches the result', () async {
       var n = 0;
