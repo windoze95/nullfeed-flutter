@@ -11,6 +11,7 @@ import '../services/api_service.dart';
 import '../services/offline_service.dart';
 import '../services/websocket_service.dart';
 import '../config/constants.dart';
+import '../config/theme.dart';
 import '../widgets/progress_bar.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   Timer? _hideControlsTimer;
   Timer? _previewTimeout;
   Timer? _previewPollTimer;
+  Timer? _previewMaxWait;
   bool _showControls = true;
   bool _isInitialized = false;
   bool _isPreviewMode = false;
@@ -229,6 +231,23 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       _startPreviewPolling();
     });
 
+    // Hard cap on the wait. If the preview never arrives, stop spinning forever
+    // and surface a graceful message instead of leaving the user on a black
+    // screen indefinitely.
+    _previewMaxWait?.cancel();
+    _previewMaxWait = Timer(
+      const Duration(seconds: AppConstants.previewMaxWaitSeconds),
+      () {
+        if (!mounted || _isInitialized) return;
+        _stopWaiting();
+        setState(() {
+          _error =
+              'This video is taking longer than expected to prepare. '
+              'Please try again in a moment.';
+        });
+      },
+    );
+
     _wsSubscription = wsService.events.listen((event) {
       if (event.type == WebSocketEventType.previewReady &&
           event.data['video_id'] == widget.videoId) {
@@ -280,6 +299,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _previewTimeout = null;
     _previewPollTimer?.cancel();
     _previewPollTimer = null;
+    _previewMaxWait?.cancel();
+    _previewMaxWait = null;
     _wsSubscription?.cancel();
     _wsSubscription = null;
   }
@@ -304,8 +325,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       return;
     }
 
-    // Capture current position
+    // Capture current position and the user's chosen speed so the upgrade is
+    // seamless.
     final currentPosition = _controller!.value.position;
+    final currentSpeed = _controller!.value.playbackSpeed;
 
     try {
       final streamUrl = _api.getVideoStreamUrl(widget.videoId);
@@ -314,6 +337,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       );
       await hqController.initialize();
       await hqController.seekTo(currentPosition);
+      await hqController.setPlaybackSpeed(currentSpeed);
       await hqController.play();
 
       if (!mounted) {
@@ -451,6 +475,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _hideControlsTimer?.cancel();
     _previewTimeout?.cancel();
     _previewPollTimer?.cancel();
+    _previewMaxWait?.cancel();
     // Save final position (fire-and-forget; a failed save must never throw
     // out of dispose). Skipped when _navigateBack already fired the save on
     // the way out, so teardown sends exactly one /progress PUT.
@@ -537,7 +562,28 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   ),
                 )
               else
-                const Center(child: CircularProgressIndicator()),
+                const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Preparing your video…',
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Buffering spinner while the player stalls mid-playback.
+              if (_isInitialized && _controller != null)
+                ValueListenableBuilder(
+                  valueListenable: _controller!,
+                  builder: (_, value, __) => value.isBuffering
+                      ? const Center(child: CircularProgressIndicator())
+                      : const SizedBox.shrink(),
+                ),
 
               // Back button while waiting for the player to come up — the
               // controls overlay only exists once playback started.
@@ -638,6 +684,11 @@ class _ControlsOverlay extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: onBack,
+                  ),
+                  const Spacer(),
+                  _SpeedButton(
+                    controller: controller,
+                    onInteraction: onInteraction,
                   ),
                 ],
               ),
@@ -757,5 +808,80 @@ class _ControlsOverlay extends StatelessWidget {
       return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Playback-speed picker shown in the controls overlay. Reflects the
+/// controller's current speed live and lets the viewer pick 0.5x–2x.
+class _SpeedButton extends StatelessWidget {
+  final VideoPlayerController controller;
+  final VoidCallback onInteraction;
+
+  const _SpeedButton({required this.controller, required this.onInteraction});
+
+  static const List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+  String _label(double speed) {
+    final value = speed == speed.roundToDouble()
+        ? speed.toStringAsFixed(0)
+        : speed.toString();
+    return '${value}x';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: controller,
+      builder: (_, value, __) => PopupMenuButton<double>(
+        tooltip: 'Playback speed',
+        initialValue: value.playbackSpeed,
+        color: NullFeedTheme.surfaceColor,
+        onSelected: (speed) {
+          controller.setPlaybackSpeed(speed);
+          onInteraction();
+        },
+        itemBuilder: (_) => [
+          for (final speed in _speeds)
+            PopupMenuItem<double>(
+              value: speed,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.check,
+                    size: 18,
+                    color: value.playbackSpeed == speed
+                        ? NullFeedTheme.primaryColor
+                        : Colors.transparent,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _label(speed),
+                    style: const TextStyle(color: NullFeedTheme.textPrimary),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.speed, color: Colors.white, size: 20),
+              const SizedBox(width: 4),
+              Text(
+                _label(value.playbackSpeed),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

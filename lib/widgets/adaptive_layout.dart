@@ -17,10 +17,6 @@ class AdaptiveLayout extends StatelessWidget {
     return DeviceType.phone;
   }
 
-  /// The Flutter app is iOS-only (the native tvOS app covers Apple TV).
-  /// Kept so existing call sites don't need churn.
-  static bool isTv(BuildContext context) => false;
-
   static bool isTablet(BuildContext context) =>
       getDeviceType(context) == DeviceType.tablet;
 
