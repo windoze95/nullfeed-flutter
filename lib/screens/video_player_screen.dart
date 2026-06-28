@@ -593,6 +593,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                     alignment: Alignment.topLeft,
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      tooltip: 'Back',
                       onPressed: _navigateBack,
                     ),
                   ),
@@ -604,21 +605,24 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   top: 16,
                   right: 16,
                   child: SafeArea(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        '360p',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                    child: Semantics(
+                      label: 'Playing preview quality, 360p',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          '360p',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -683,6 +687,7 @@ class _ControlsOverlay extends StatelessWidget {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    tooltip: 'Back',
                     onPressed: onBack,
                   ),
                   const Spacer(),
@@ -704,6 +709,8 @@ class _ControlsOverlay extends StatelessWidget {
                   IconButton(
                     iconSize: 48,
                     icon: const Icon(Icons.replay_10, color: Colors.white),
+                    tooltip:
+                        'Skip back ${AppConstants.skipBackwardSeconds} seconds',
                     onPressed: () {
                       onSeekRelative(-AppConstants.skipBackwardSeconds);
                       onInteraction();
@@ -720,6 +727,7 @@ class _ControlsOverlay extends StatelessWidget {
                             : Icons.play_circle_filled,
                         color: Colors.white,
                       ),
+                      tooltip: value.isPlaying ? 'Pause' : 'Play',
                       onPressed: () {
                         onPlayPause();
                         onInteraction();
@@ -730,6 +738,8 @@ class _ControlsOverlay extends StatelessWidget {
                   IconButton(
                     iconSize: 48,
                     icon: const Icon(Icons.forward_10, color: Colors.white),
+                    tooltip:
+                        'Skip forward ${AppConstants.skipForwardSeconds} seconds',
                     onPressed: () {
                       onSeekRelative(AppConstants.skipForwardSeconds);
                       onInteraction();
@@ -760,6 +770,15 @@ class _ControlsOverlay extends StatelessWidget {
                             ? position.inMilliseconds / duration.inMilliseconds
                             : 0,
                         height: 4,
+                        semanticLabel: 'Video position',
+                        semanticValueBuilder: (fraction) {
+                          final at = Duration(
+                            milliseconds: (fraction * duration.inMilliseconds)
+                                .round(),
+                          );
+                          return '${_formatDuration(at)} of '
+                              '${_formatDuration(duration)}';
+                        },
                         onSeek: (fraction) {
                           final target = Duration(
                             milliseconds: (fraction * duration.inMilliseconds)
@@ -864,7 +883,9 @@ class _SpeedButton extends StatelessWidget {
             ),
         ],
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          // vertical: 12 keeps the tap target at the 44pt minimum (20pt icon +
+          // 24pt padding).
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

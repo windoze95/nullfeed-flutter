@@ -48,6 +48,36 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
     return null;
   }
 
+  /// One merged, human-readable label — title, date, watched and download
+  /// state — instead of a pile of separate text/icon nodes.
+  String _semanticLabel(String? offlineStatus) {
+    final v = widget.video;
+    final parts = <String>[v.title];
+    if (v.uploadedAt != null) {
+      parts.add(DateFormat.yMMMd().format(v.uploadedAt!));
+    }
+    if (v.isWatched) parts.add('watched');
+    final state = _downloadStateLabel(offlineStatus);
+    if (state != null) parts.add(state);
+    return parts.join(', ');
+  }
+
+  String? _downloadStateLabel(String? offlineStatus) {
+    switch (widget.video.status) {
+      case VideoStatus.complete:
+        if (offlineStatus == 'complete') return 'downloaded';
+        if (offlineStatus == 'downloading') return 'downloading to device';
+        return null;
+      case VideoStatus.downloading:
+      case VideoStatus.pending:
+        return 'downloading';
+      case VideoStatus.cataloged:
+        return null;
+      case VideoStatus.failed:
+        return 'download failed';
+    }
+  }
+
   Widget _buildTrailingWidget() {
     final offlineStatus = ref.watch(offlineStatusProvider(widget.video.id));
     final offlineProgress = ref.watch(offlineProgressProvider);
@@ -63,8 +93,8 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
         if (offlineStatus == 'downloading') {
           final progress = offlineProgress[widget.video.id];
           return SizedBox(
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -76,19 +106,24 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                     value: progress,
                   ),
                 ),
-                InkWell(
-                  onTap: () {
+                IconButton(
+                  icon: const Icon(
+                    Icons.stop_rounded,
+                    size: 14,
+                    color: NullFeedTheme.textMuted,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  tooltip: 'Cancel download',
+                  onPressed: () {
                     ref
                         .read(offlineServiceProvider)
                         .cancelDownload(widget.video.id);
                     ref.read(offlineVideosProvider.notifier).refresh();
                   },
-                  borderRadius: BorderRadius.circular(18),
-                  child: const Icon(
-                    Icons.stop_rounded,
-                    size: 14,
-                    color: NullFeedTheme.textMuted,
-                  ),
                 ),
               ],
             ),
@@ -114,8 +149,8 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
       case VideoStatus.downloading:
       case VideoStatus.pending:
         return SizedBox(
-          width: 36,
-          height: 36,
+          width: 44,
+          height: 44,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -130,14 +165,19 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                 ),
               ),
               if (widget.onCancel != null)
-                InkWell(
-                  onTap: widget.onCancel,
-                  borderRadius: BorderRadius.circular(18),
-                  child: const Icon(
+                IconButton(
+                  icon: const Icon(
                     Icons.stop_rounded,
                     size: 14,
                     color: NullFeedTheme.textMuted,
                   ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  tooltip: 'Cancel download',
+                  onPressed: widget.onCancel,
                 ),
             ],
           ),
@@ -163,6 +203,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
   @override
   Widget build(BuildContext context) {
     final isTappable = widget.onTap != null;
+    final offlineStatus = ref.watch(offlineStatusProvider(widget.video.id));
 
     return Opacity(
       opacity: isTappable || widget.video.isPlayable ? 1.0 : 0.7,
@@ -170,147 +211,167 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
         scale: _isPressed ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
-        child: InkWell(
-          onTap: isTappable ? _handleTap : null,
-          onLongPress: widget.onMenu,
-          onTapDown: isTappable
-              ? (_) => setState(() => _isPressed = true)
-              : null,
-          onTapUp: isTappable
-              ? (_) => setState(() => _isPressed = false)
-              : null,
-          onTapCancel: isTappable
-              ? () => setState(() => _isPressed = false)
-              : null,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                // Thumbnail
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    width: 160,
-                    height: 90,
-                    child: Stack(
-                      fit: StackFit.expand,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              // Play target: thumbnail + info as one labelled node. The
+              // trailing controls keep their own nodes so they stay operable.
+              Expanded(
+                child: Semantics(
+                  button: isTappable,
+                  label: _semanticLabel(offlineStatus),
+                  excludeSemantics: true,
+                  onTap: isTappable ? _handleTap : null,
+                  child: InkWell(
+                    onTap: isTappable ? _handleTap : null,
+                    onLongPress: widget.onMenu,
+                    onTapDown: isTappable
+                        ? (_) => setState(() => _isPressed = true)
+                        : null,
+                    onTapUp: isTappable
+                        ? (_) => setState(() => _isPressed = false)
+                        : null,
+                    onTapCancel: isTappable
+                        ? () => setState(() => _isPressed = false)
+                        : null,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Row(
                       children: [
-                        if (_thumbnailUrl != null)
-                          CachedNetworkImage(
-                            imageUrl: _thumbnailUrl!,
-                            fit: BoxFit.cover,
-                            errorWidget: (_, __, ___) => Container(
-                              color: NullFeedTheme.cardColor,
-                              child: const Icon(
-                                Icons.play_circle_outline,
-                                color: NullFeedTheme.textMuted,
-                              ),
-                            ),
-                          )
-                        else
-                          Container(
-                            color: NullFeedTheme.cardColor,
-                            child: const Icon(
-                              Icons.play_circle_outline,
-                              color: NullFeedTheme.textMuted,
+                        // Thumbnail
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: SizedBox(
+                            width: 160,
+                            height: 90,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (_thumbnailUrl != null)
+                                  CachedNetworkImage(
+                                    imageUrl: _thumbnailUrl!,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (_, __, ___) => Container(
+                                      color: NullFeedTheme.cardColor,
+                                      child: const Icon(
+                                        Icons.play_circle_outline,
+                                        color: NullFeedTheme.textMuted,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    color: NullFeedTheme.cardColor,
+                                    child: const Icon(
+                                      Icons.play_circle_outline,
+                                      color: NullFeedTheme.textMuted,
+                                    ),
+                                  ),
+                                // Duration
+                                if (widget.video.durationSeconds > 0)
+                                  Positioned(
+                                    right: 4,
+                                    bottom: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.8,
+                                        ),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: Text(
+                                        widget.video.formattedDuration,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                // Watch progress bar
+                                if (widget.video.watchProgress > 0)
+                                  Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    child: NullFeedProgressBar(
+                                      progress: widget.video.watchProgress,
+                                      height: 3,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                        // Duration
-                        if (widget.video.durationSeconds > 0)
-                          Positioned(
-                            right: 4,
-                            bottom: 4,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.8),
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                              child: Text(
-                                widget.video.formattedDuration,
+                        ),
+                        const SizedBox(width: 12),
+                        // Video info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.video.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
+                                  color: NullFeedTheme.textPrimary,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  if (widget.video.uploadedAt != null)
+                                    Text(
+                                      DateFormat.yMMMd().format(
+                                        widget.video.uploadedAt!,
+                                      ),
+                                      style: const TextStyle(
+                                        color: NullFeedTheme.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  if (widget.video.isWatched) ...[
+                                    const SizedBox(width: 8),
+                                    const Icon(
+                                      Icons.check_circle,
+                                      size: 14,
+                                      color: NullFeedTheme.successColor,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
                           ),
-                        // Watch progress bar
-                        if (widget.video.watchProgress > 0)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: NullFeedProgressBar(
-                              progress: widget.video.watchProgress,
-                              height: 3,
-                            ),
-                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                // Video info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.video.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: NullFeedTheme.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          if (widget.video.uploadedAt != null)
-                            Text(
-                              DateFormat.yMMMd().format(
-                                widget.video.uploadedAt!,
-                              ),
-                              style: const TextStyle(
-                                color: NullFeedTheme.textMuted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          if (widget.video.isWatched) ...[
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.check_circle,
-                              size: 14,
-                              color: NullFeedTheme.successColor,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
+              ),
+              // Status-aware trailing widget
+              _buildTrailingWidget(),
+              if (widget.onMenu != null)
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: NullFeedTheme.textMuted,
                   ),
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  onPressed: widget.onMenu,
+                  tooltip: 'More actions',
                 ),
-                // Status-aware trailing widget
-                _buildTrailingWidget(),
-                if (widget.onMenu != null)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.more_vert,
-                      color: NullFeedTheme.textMuted,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: widget.onMenu,
-                    tooltip: 'More actions',
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
       ),

@@ -11,7 +11,9 @@ class NullFeedTheme {
   static const Color backgroundColor = Color(0xFF0A0A0A);
   static const Color textPrimary = Color(0xFFFFFFFF);
   static const Color textSecondary = Color(0xFFB3B3B3);
-  static const Color textMuted = Color(0xFF666666);
+  // Lightened from 0xFF666666 to meet WCAG AA (>=4.5:1): 4.5:1 on cardColor,
+  // 5.4:1 on backgroundColor. The old value was ~2.9:1 on cards.
+  static const Color textMuted = Color(0xFF858585);
   static const Color dividerColor = Color(0xFF2A2A2A);
   static const Color errorColor = Color(0xFFCF6679);
   static const Color successColor = Color(0xFF4CAF50);

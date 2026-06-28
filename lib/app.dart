@@ -19,6 +19,20 @@ class NullFeedApp extends ConsumerWidget {
       themeMode: ThemeMode.dark,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
+      // Honor the platform Dynamic Type setting, but clamp the extremes so the
+      // fixed-size cards and rows don't break at very large accessibility sizes.
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(
+              minScaleFactor: 0.8,
+              maxScaleFactor: 1.3,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
   }
 }
