@@ -3,12 +3,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/app_globals.dart';
 import 'config/theme.dart';
 import 'config/routes.dart';
+import 'providers/auth_provider.dart';
+import 'providers/feed_provider.dart';
 
-class NullFeedApp extends ConsumerWidget {
+class NullFeedApp extends ConsumerStatefulWidget {
   const NullFeedApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NullFeedApp> createState() => _NullFeedAppState();
+}
+
+class _NullFeedAppState extends ConsumerState<NullFeedApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // On returning to the foreground, refresh the feed so watch positions
+    // changed elsewhere (notably on another device) surface — the Continue
+    // Watching row in particular. Skipped when signed out: nothing watches the
+    // feed then, and the refetch would just 401.
+    if (state == AppLifecycleState.resumed &&
+        ref.read(authStateProvider).currentUser != null) {
+      invalidateFeedProviders(ref);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(

@@ -47,6 +47,10 @@ abstract class Video with _$Video {
   factory Video.fromJson(Map<String, dynamic> json) => _$VideoFromJson(json);
 }
 
+/// Seconds to rewind when resuming so the viewer gets a moment of context
+/// before the position they left off at.
+const int _resumeRewindSeconds = 10;
+
 extension VideoExtensions on Video {
   bool get isPlayable =>
       status == VideoStatus.complete || previewStatus == 'READY';
@@ -65,6 +69,22 @@ extension VideoExtensions on Video {
   double get watchProgress {
     if (durationSeconds == 0) return 0;
     return watchPositionSeconds / durationSeconds;
+  }
+
+  /// Whether opening this video should resume from [watchPositionSeconds]
+  /// rather than starting over. True only for partially-watched videos: a
+  /// fresh video (position 0) or a fully-watched one ([isWatched]) starts from
+  /// the top. Drives the player's resume affordance.
+  bool get canResume => watchPositionSeconds > 0 && !isWatched;
+
+  /// Where playback should seek when resuming: [watchPositionSeconds] rewound a
+  /// few seconds for context, clamped to the video. Falls back to the raw
+  /// position as the upper bound when the duration is unknown.
+  int get resumeSeekSeconds {
+    final maxSeconds = durationSeconds > 0
+        ? durationSeconds
+        : watchPositionSeconds;
+    return (watchPositionSeconds - _resumeRewindSeconds).clamp(0, maxSeconds);
   }
 
   String get formattedDuration {
