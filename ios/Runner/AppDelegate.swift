@@ -140,7 +140,13 @@ import UserNotifications
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
     // Present notifications while the app is in the foreground.
-    completionHandler([.banner, .sound, .badge])
+    // `.banner`/`.list` are iOS 14+; the deployment target is iOS 13, so fall
+    // back to the (deprecated-but-functional) `.alert` on older systems.
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .list, .sound, .badge])
+    } else {
+      completionHandler([.alert, .sound, .badge])
+    }
   }
 
   /// Handles a notification tap. Routes live when Dart's handler is ready
