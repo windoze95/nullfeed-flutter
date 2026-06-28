@@ -9,6 +9,7 @@ import 'package:nullfeed/models/user.dart';
 import 'package:nullfeed/models/video.dart';
 import 'package:nullfeed/models/youtube_import.dart';
 import 'package:nullfeed/services/api_service.dart';
+import 'package:nullfeed/services/push_service.dart';
 import 'package:nullfeed/services/storage_service.dart';
 import 'package:nullfeed/services/websocket_service.dart';
 
@@ -17,6 +18,8 @@ class MockApiService extends Mock implements ApiService {}
 class MockStorageService extends Mock implements StorageService {}
 
 class MockWebSocketService extends Mock implements WebSocketService {}
+
+class MockPushService extends Mock implements PushService {}
 
 /// In-memory [StorageService] for widget tests.
 ///
@@ -29,6 +32,7 @@ class FakeStorageService implements StorageService {
   String? _serverUrl;
   String? _selectedUserId;
   String? _sessionToken;
+  String? _deviceId;
   String _preferredQuality = '1080p';
   final Set<String> _autoOfflineChannels = {};
 
@@ -54,6 +58,14 @@ class FakeStorageService implements StorageService {
   @override
   Future<void> setSessionToken(String? token) async {
     _sessionToken = token;
+  }
+
+  @override
+  String? getDeviceId() => _deviceId;
+
+  @override
+  Future<void> setDeviceId(String id) async {
+    _deviceId = id;
   }
 
   @override
@@ -89,6 +101,7 @@ class FakeStorageService implements StorageService {
   @override
   Future<void> clearAll() async {
     _serverUrl = null;
+    _deviceId = null;
     _preferredQuality = '1080p';
     _autoOfflineChannels.clear();
     await clearSession();

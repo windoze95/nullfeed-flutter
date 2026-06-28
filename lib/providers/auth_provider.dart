@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_globals.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 import '../services/storage_service.dart';
 import 'websocket_provider.dart';
 
@@ -63,6 +64,20 @@ class AuthNotifier extends Notifier<AuthState> {
   String _describe(Object error, String fallback) =>
       error is ApiException ? error.message : fallback;
 
+  /// Registers this device for push once signed in (best-effort, fire-and-
+  /// forget). [interactive] true requests permission — showing the system
+  /// prompt if needed — on a user-driven sign-in; false silently refreshes the
+  /// token on session restore so a cold launch never pops the dialog. Also
+  /// drains any notification tap that cold-started the app, now that the router
+  /// can navigate to it.
+  void _registerForPush({required bool interactive}) {
+    final push = ref.read(pushServiceProvider);
+    unawaited(
+      interactive ? push.registerForPush() : push.registerIfAuthorized(),
+    );
+    unawaited(push.handleInitialNotification());
+  }
+
   Future<void> _restoreSession() async {
     final token = _storage.getSessionToken();
     if (token == null) return;
@@ -73,6 +88,8 @@ class AuthNotifier extends Notifier<AuthState> {
       final user = await _api.getMe();
       if (_restoreSuperseded(token)) return;
       state = AuthState(profiles: state.profiles, currentUser: user);
+      // Silent: refresh the token but never prompt at cold launch.
+      _registerForPush(interactive: false);
     } on ApiException catch (e) {
       if (_restoreSuperseded(token)) return;
       if (e.statusCode == 401) {
@@ -119,6 +136,7 @@ class AuthNotifier extends Notifier<AuthState> {
       await _storage.setSelectedUserId(result.user.id);
       await _storage.setSessionToken(result.token);
       state = state.copyWith(currentUser: result.user, isLoading: false);
+      _registerForPush(interactive: true);
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -181,6 +199,7 @@ class AuthNotifier extends Notifier<AuthState> {
       currentUser: result.user,
       isLoading: false,
     );
+    _registerForPush(interactive: true);
   }
 
   Future<void> updateProfile(
@@ -261,11 +280,16 @@ class AuthNotifier extends Notifier<AuthState> {
     // 401 sees the cleared state and bails.
     state = AuthState(profiles: state.profiles);
     ref.read(webSocketServiceProvider).disconnect();
+    // Best-effort: drop this device's push registration (the dead token would
+    // be pruned server-side anyway).
+    unawaited(ref.read(pushServiceProvider).unregister());
     unawaited(_storage.clearSession());
     return true;
   }
 
   Future<void> signOut() async {
+    // Remove this device's push token while the session is still valid.
+    await ref.read(pushServiceProvider).unregister();
     try {
       // Best-effort: delete the session server-side.
       await _api.logout();

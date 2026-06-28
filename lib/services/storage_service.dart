@@ -40,6 +40,14 @@ class StorageService {
     }
   }
 
+  // Device id (stable per install; identifies this device for push
+  // registration). Lives in the settings box so it survives sign-out.
+  String? getDeviceId() => _settings.get(AppConstants.deviceIdKey) as String?;
+
+  Future<void> setDeviceId(String id) async {
+    await _settings.put(AppConstants.deviceIdKey, id);
+  }
+
   // Quality preference
   String getPreferredQuality() =>
       _settings.get(AppConstants.preferredQualityKey, defaultValue: '1080p')
