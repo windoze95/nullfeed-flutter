@@ -3,7 +3,10 @@ import 'dart:io';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nullfeed/config/constants.dart';
+import 'package:nullfeed/models/channel.dart';
+import 'package:nullfeed/models/feed.dart';
 import 'package:nullfeed/models/user.dart';
+import 'package:nullfeed/models/video.dart';
 import 'package:nullfeed/models/youtube_import.dart';
 import 'package:nullfeed/services/api_service.dart';
 import 'package:nullfeed/services/storage_service.dart';
@@ -105,6 +108,7 @@ Future<Directory> setUpTestHive() async {
   await Hive.openBox<dynamic>(AppConstants.settingsBox);
   await Hive.openBox<dynamic>(AppConstants.sessionBox);
   await Hive.openBox<dynamic>(AppConstants.offlineBox);
+  await Hive.openBox<dynamic>(AppConstants.catalogCacheBox);
   return dir;
 }
 
@@ -161,5 +165,48 @@ ChannelSuggestion makeSuggestion({
     name: name,
     source: source,
     score: score,
+  );
+}
+
+Channel makeChannel({
+  String id = 'c1',
+  String youtubeChannelId = 'UC-c1',
+  String name = 'Some Channel',
+  String slug = 'some-channel',
+  String? avatarUrl,
+  DateTime? lastCheckedAt,
+}) {
+  return Channel(
+    id: id,
+    youtubeChannelId: youtubeChannelId,
+    name: name,
+    slug: slug,
+    avatarUrl: avatarUrl,
+    lastCheckedAt: lastCheckedAt,
+  );
+}
+
+Video makeVideo({
+  String id = 'v1',
+  String youtubeVideoId = 'yt-v1',
+  String channelId = 'c1',
+  String title = 'A Video',
+  int durationSeconds = 600,
+  VideoStatus status = VideoStatus.complete,
+}) {
+  return Video(
+    id: id,
+    youtubeVideoId: youtubeVideoId,
+    channelId: channelId,
+    title: title,
+    durationSeconds: durationSeconds,
+    status: status,
+  );
+}
+
+FeedItem makeFeedItem({Channel? channel, Video? video}) {
+  return FeedItem(
+    channel: channel ?? makeChannel(),
+    video: video ?? makeVideo(),
   );
 }

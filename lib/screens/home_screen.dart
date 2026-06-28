@@ -74,12 +74,9 @@ class HomeScreen extends ConsumerWidget {
         ref.read(apiServiceProvider).pollAllChannels().catchError((_) {}),
       );
       // Reload the unified feed and keep the spinner up until it resolves.
-      final reload = ref.refresh(homeFeedProvider.future);
-      try {
-        await reload;
-      } catch (_) {
-        // The inline error state renders instead.
-      }
+      // refresh() resolves its own errors into state (cache fallback on a
+      // connection error), so it never throws.
+      await ref.read(homeFeedProvider.notifier).refresh();
     }
 
     return Scaffold(

@@ -2,23 +2,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/channel.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
+import '../services/catalog_cache_service.dart';
 
+/// The subscribed channel list. Hydrates from the per-profile cache instantly
+/// on build (so the Library tab shows last-known channels offline without a
+/// spinner), then refreshes in the background and writes the result through to
+/// the cache. A connection error falls back to the cache; a real server error
+/// still surfaces.
 class ChannelsNotifier extends Notifier<AsyncValue<List<Channel>>> {
   @override
   AsyncValue<List<Channel>> build() {
-    load();
-    return const AsyncValue.loading();
+    final cached = _cache.readChannels();
+    // Deferred so the load runs after build() returns and `state` exists.
+    Future.microtask(load);
+    return cached != null
+        ? AsyncValue.data(cached)
+        : const AsyncValue.loading();
   }
 
   ApiService get _api => ref.read(apiServiceProvider);
+  CatalogCacheService get _cache => ref.read(catalogCacheServiceProvider);
 
   Future<void> load() async {
-    state = const AsyncValue.loading();
+    // The build-time load is deferred, and screens invalidate this provider
+    // while a fetch is in flight; bail if this element was disposed meanwhile.
+    if (!ref.mounted) return;
+    final api = _api;
+    final cache = _cache;
+    // Keep cached channels on screen while refetching; only spin when empty.
+    if (!state.hasValue) state = const AsyncValue.loading();
     try {
-      final channels = await _api.getChannels();
-      state = AsyncValue.data(channels);
+      final channels = await api.getChannels();
+      await cache.writeChannels(channels);
+      if (ref.mounted) state = AsyncValue.data(channels);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (ref.mounted) {
+        state = resolveCatalogRefreshError(e, st, state, cache.readChannels());
+      }
     }
   }
 
@@ -45,18 +65,106 @@ final channelsProvider =
       ChannelsNotifier.new,
     );
 
-final channelDetailProvider = FutureProvider.family<Channel, String>((
-  ref,
-  channelId,
-) async {
-  final api = ref.watch(apiServiceProvider);
-  return api.getChannel(channelId);
-});
+/// A single channel's detail. Hydrates from the per-profile cache instantly so
+/// the channel screen header shows offline, then refreshes and writes through.
+/// Connection errors fall back to the cache; real errors surface.
+class ChannelDetailNotifier extends Notifier<AsyncValue<Channel>> {
+  late final String _channelId;
 
-final channelVideosProvider = FutureProvider.family<List<Video>, String>((
-  ref,
-  channelId,
-) async {
-  final api = ref.watch(apiServiceProvider);
-  return api.getChannelVideos(channelId);
-});
+  void init(String channelId) => _channelId = channelId;
+
+  @override
+  AsyncValue<Channel> build() {
+    final cached = _cache.readChannel(_channelId);
+    Future.microtask(refresh);
+    return cached != null
+        ? AsyncValue.data(cached)
+        : const AsyncValue.loading();
+  }
+
+  ApiService get _api => ref.read(apiServiceProvider);
+  CatalogCacheService get _cache => ref.read(catalogCacheServiceProvider);
+
+  Future<void> refresh() async {
+    if (!ref.mounted) return;
+    final api = _api;
+    final cache = _cache;
+    if (!state.hasValue) state = const AsyncValue.loading();
+    try {
+      final channel = await api.getChannel(_channelId);
+      await cache.writeChannel(channel);
+      if (ref.mounted) state = AsyncValue.data(channel);
+    } catch (e, st) {
+      if (ref.mounted) {
+        state = resolveCatalogRefreshError(
+          e,
+          st,
+          state,
+          cache.readChannel(_channelId),
+        );
+      }
+    }
+  }
+}
+
+final channelDetailProvider =
+    NotifierProvider.family<ChannelDetailNotifier, AsyncValue<Channel>, String>(
+      (channelId) {
+        final notifier = ChannelDetailNotifier();
+        notifier.init(channelId);
+        return notifier;
+      },
+    );
+
+/// A channel's video list. Hydrates from the per-profile cache instantly so the
+/// channel screen lists last-known videos offline, then refreshes and writes
+/// through. Connection errors fall back to the cache; real errors surface.
+class ChannelVideosNotifier extends Notifier<AsyncValue<List<Video>>> {
+  late final String _channelId;
+
+  void init(String channelId) => _channelId = channelId;
+
+  @override
+  AsyncValue<List<Video>> build() {
+    final cached = _cache.readChannelVideos(_channelId);
+    Future.microtask(refresh);
+    return cached != null
+        ? AsyncValue.data(cached)
+        : const AsyncValue.loading();
+  }
+
+  ApiService get _api => ref.read(apiServiceProvider);
+  CatalogCacheService get _cache => ref.read(catalogCacheServiceProvider);
+
+  Future<void> refresh() async {
+    if (!ref.mounted) return;
+    final api = _api;
+    final cache = _cache;
+    if (!state.hasValue) state = const AsyncValue.loading();
+    try {
+      final videos = await api.getChannelVideos(_channelId);
+      await cache.writeChannelVideos(_channelId, videos);
+      if (ref.mounted) state = AsyncValue.data(videos);
+    } catch (e, st) {
+      if (ref.mounted) {
+        state = resolveCatalogRefreshError(
+          e,
+          st,
+          state,
+          cache.readChannelVideos(_channelId),
+        );
+      }
+    }
+  }
+}
+
+final channelVideosProvider =
+    NotifierProvider.family<
+      ChannelVideosNotifier,
+      AsyncValue<List<Video>>,
+      String
+    >((channelId) {
+      final notifier = ChannelVideosNotifier();
+      notifier.init(channelId);
+      return notifier;
+    });

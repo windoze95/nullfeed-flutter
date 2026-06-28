@@ -10,6 +10,7 @@ void main() async {
   await Hive.openBox(AppConstants.settingsBox);
   await Hive.openBox(AppConstants.sessionBox);
   await Hive.openBox(AppConstants.offlineBox);
+  await Hive.openBox(AppConstants.catalogCacheBox);
 
   runApp(const ProviderScope(child: NullFeedApp()));
 }

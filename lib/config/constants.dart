@@ -10,6 +10,11 @@ class AppConstants {
   static const String sessionBox = 'session';
   static const String offlineBox = 'offline_videos';
 
+  /// Last-good catalog snapshot (channel list, home feed, per-channel video
+  /// lists) persisted so the app stays browsable offline. Entries are scoped
+  /// by the active profile — see [CatalogCacheService].
+  static const String catalogCacheBox = 'catalog_cache';
+
   // Hive keys
   static const String serverUrlKey = 'server_url';
   static const String selectedUserIdKey = 'selected_user_id';

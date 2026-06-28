@@ -121,14 +121,12 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       // Poll failures (offline server, YouTube hiccup) shouldn't block
       // refreshing what we already have.
     }
-    try {
-      await Future.wait([
-        ref.refresh(channelDetailProvider(widget.channelId).future),
-        ref.refresh(channelVideosProvider(widget.channelId).future),
-      ]);
-    } catch (_) {
-      // Errors surface through the providers' error states.
-    }
+    // Each refresh() resolves its own errors into state (cache fallback on a
+    // connection error), so neither throws.
+    await Future.wait([
+      ref.read(channelDetailProvider(widget.channelId).notifier).refresh(),
+      ref.read(channelVideosProvider(widget.channelId).notifier).refresh(),
+    ]);
   }
 
   /// Picks the video for the Resume/Play button:
