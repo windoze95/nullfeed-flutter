@@ -11,6 +11,7 @@ import '../screens/downloads_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/channel_detail_screen.dart';
 import '../screens/video_player_screen.dart';
+import '../screens/search_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -98,6 +99,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) =>
             VideoPlayerScreen(videoId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/search',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const SearchScreen(),
       ),
     ],
   );

@@ -149,6 +149,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               title: const Text('Library'),
               backgroundColor: NullFeedTheme.backgroundColor,
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Search',
+                  onPressed: () => context.push('/search'),
+                ),
                 PopupMenuButton<_LibrarySort>(
                   icon: const Icon(Icons.sort),
                   tooltip: 'Sort',
