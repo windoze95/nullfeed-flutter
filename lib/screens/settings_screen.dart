@@ -343,7 +343,8 @@ class _YoutubeCookiesSection extends ConsumerStatefulWidget {
 class _YoutubeCookiesSectionState
     extends ConsumerState<_YoutubeCookiesSection> {
   final _controller = TextEditingController();
-  ({bool configured, bool stale, String? updatedAt})? _status;
+  ({bool configured, bool stale, String? updatedAt, String? lastError})?
+  _status;
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -521,7 +522,9 @@ class _YoutubeCookiesSectionState
     );
   }
 
-  Widget _statusRow(({bool configured, bool stale, String? updatedAt})? s) {
+  Widget _statusRow(
+    ({bool configured, bool stale, String? updatedAt, String? lastError})? s,
+  ) {
     if (s == null || !s.configured) {
       return const Row(
         children: [
@@ -532,17 +535,35 @@ class _YoutubeCookiesSectionState
       );
     }
     if (s.stale) {
-      return const Row(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.warning_amber_rounded,
-            color: NullFeedTheme.errorColor,
-            size: 18,
+          const Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: NullFeedTheme.errorColor,
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Cookies aren't working — re-export and paste fresh ones",
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text('Cookies expired — paste fresh ones to keep playing'),
-          ),
+          if (s.lastError != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              s.lastError!,
+              style: const TextStyle(
+                color: NullFeedTheme.textMuted,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
         ],
       );
     }

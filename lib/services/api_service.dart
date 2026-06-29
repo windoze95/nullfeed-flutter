@@ -453,23 +453,22 @@ class ApiService {
   });
 
   // YouTube cookies (admin only) — enables age-restricted / members-only videos.
-  ({bool configured, bool stale, String? updatedAt}) _parseCookieStatus(
-    Map<String, dynamic> data,
-  ) => (
+  ({bool configured, bool stale, String? updatedAt, String? lastError})
+  _parseCookieStatus(Map<String, dynamic> data) => (
     configured: data['configured'] == true,
     stale: data['stale'] == true,
     updatedAt: data['updated_at'] as String?,
+    lastError: data['last_error'] as String?,
   );
 
-  Future<({bool configured, bool stale, String? updatedAt})>
+  Future<({bool configured, bool stale, String? updatedAt, String? lastError})>
   getYoutubeCookiesStatus() => _guard(() async {
     final r = await _dio.get('$_baseUrl${AppConstants.settingsYoutubeCookies}');
     return _parseCookieStatus(r.data as Map<String, dynamic>);
   });
 
-  Future<({bool configured, bool stale, String? updatedAt})> saveYoutubeCookies(
-    String cookies,
-  ) => _guard(() async {
+  Future<({bool configured, bool stale, String? updatedAt, String? lastError})>
+  saveYoutubeCookies(String cookies) => _guard(() async {
     final r = await _dio.put(
       '$_baseUrl${AppConstants.settingsYoutubeCookies}',
       data: {'cookies': cookies},
