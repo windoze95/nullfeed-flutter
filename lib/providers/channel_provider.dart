@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/constants.dart';
 import '../models/channel.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
@@ -145,6 +146,7 @@ class ChannelVideosNotifier extends Notifier<AsyncValue<List<Video>>> {
       final videos = await api.getChannelVideos(_channelId);
       await cache.writeChannelVideos(_channelId, videos);
       if (ref.mounted) state = AsyncValue.data(videos);
+      _prewarm(videos);
     } catch (e, st) {
       if (ref.mounted) {
         state = resolveCatalogRefreshError(
@@ -155,6 +157,21 @@ class ChannelVideosNotifier extends Notifier<AsyncValue<List<Video>>> {
         );
       }
     }
+  }
+
+  /// Best-effort: ask the backend to pre-generate previews for the first few
+  /// not-yet-playable videos so opening one lands on the ready-preview fast
+  /// path. Skips already-downloaded / already-previewed videos.
+  void _prewarm(List<Video> videos) {
+    final ids = videos
+        .where((v) => !v.isPlayable)
+        .take(AppConstants.prewarmBatchSize)
+        .map((v) => v.id)
+        .toList();
+    if (ids.isEmpty) return;
+    // Detached and best-effort: a prewarm failure must never affect the load,
+    // so the call is deferred (swallowing even a synchronous throw) and ignored.
+    Future(() => _api.prewarmPreviews(ids)).ignore();
   }
 }
 

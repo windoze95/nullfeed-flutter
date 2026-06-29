@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/constants.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
 
@@ -99,6 +100,7 @@ class QueueNotifier extends Notifier<QueueState> {
         isLoading: false,
         isLoadingMore: false,
       );
+      _prewarm(page.items);
     } catch (e) {
       if (requestId != _requestId) return;
       state = state.copyWith(
@@ -106,6 +108,21 @@ class QueueNotifier extends Notifier<QueueState> {
         error: e is ApiException ? e.message : 'Failed to load your queue.',
       );
     }
+  }
+
+  /// Best-effort: ask the backend to pre-generate previews for the first few
+  /// not-yet-playable queued videos so opening one lands on the ready-preview
+  /// fast path. Skips already-downloaded / already-previewed videos.
+  void _prewarm(List<Video> videos) {
+    final ids = videos
+        .where((v) => !v.isPlayable)
+        .take(AppConstants.prewarmBatchSize)
+        .map((v) => v.id)
+        .toList();
+    if (ids.isEmpty) return;
+    // Detached and best-effort: a prewarm failure must never affect the load,
+    // so the call is deferred (swallowing even a synchronous throw) and ignored.
+    Future(() => _api.prewarmPreviews(ids)).ignore();
   }
 
   /// Re-runs the first-page load (pull-to-refresh, retry after error).

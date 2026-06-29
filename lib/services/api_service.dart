@@ -484,6 +484,17 @@ class ApiService {
     await _dio.post('$_baseUrl${AppConstants.videoPreview(videoId)}');
   });
 
+  /// Pre-generates 360p previews for [videoIds] the user is likely to play next,
+  /// so a later tap lands on the ready-preview fast path instead of the cold
+  /// instant-stream path. Best-effort; the backend dedupes and caps the batch.
+  Future<void> prewarmPreviews(List<String> videoIds) => _guard(() async {
+    if (videoIds.isEmpty) return;
+    await _dio.post(
+      '$_baseUrl${AppConstants.videosPrewarm}',
+      data: {'video_ids': videoIds},
+    );
+  });
+
   /// Builds the authenticated 360p preview stream URL for [id]. Like
   /// [getVideoStreamUrl] it carries a short-lived playback ticket rather than
   /// the session token. Throws [ApiException] if the ticket can't be minted.
