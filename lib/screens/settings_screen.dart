@@ -276,6 +276,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 24),
 
+                  // YouTube account (admin only) — enables age-restricted videos
+                  // for everyone on this server.
+                  if (authState.currentUser?.isAdmin == true) ...[
+                    const _SectionHeader(title: 'YouTube Account'),
+                    const _YoutubeCookiesSection(),
+                    const SizedBox(height: 24),
+                  ],
+
                   // About section
                   const _SectionHeader(title: 'About'),
                   Card(
@@ -284,7 +292,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         const ListTile(
                           leading: Icon(Icons.info_outline),
                           title: Text('NullFeed'),
-                          subtitle: Text('Version 1.0.0'),
+                          subtitle: Text('Version 0.1.0'),
                         ),
                         ListTile(
                           leading: const Icon(Icons.code),
@@ -317,5 +325,220 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(title, style: Theme.of(context).textTheme.titleLarge),
     );
+  }
+}
+
+/// Admin panel to paste/refresh a YouTube cookies.txt so age-restricted /
+/// members-only videos play. Set once; applies to every profile on the server.
+class _YoutubeCookiesSection extends ConsumerStatefulWidget {
+  const _YoutubeCookiesSection();
+
+  @override
+  ConsumerState<_YoutubeCookiesSection> createState() =>
+      _YoutubeCookiesSectionState();
+}
+
+class _YoutubeCookiesSectionState
+    extends ConsumerState<_YoutubeCookiesSection> {
+  final _controller = TextEditingController();
+  ({bool configured, bool stale, String? updatedAt})? _status;
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final s = await ref.read(apiServiceProvider).getYoutubeCookiesStatus();
+      if (mounted) {
+        setState(() {
+          _status = s;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final s = await ref.read(apiServiceProvider).saveYoutubeCookies(text);
+      if (!mounted) return;
+      _controller.clear();
+      setState(() {
+        _status = s;
+        _busy = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('YouTube cookies saved')));
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _remove() async {
+    setState(() => _busy = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.clearYoutubeCookies();
+      final s = await api.getYoutubeCookiesStatus();
+      if (mounted) {
+        setState(() {
+          _status = s;
+          _busy = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _status;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              _statusRow(status),
+            const SizedBox(height: 12),
+            Text(
+              'Paste a cookies.txt from a browser signed in to YouTube (e.g. the '
+              '"Get cookies.txt LOCALLY" extension) to play age-restricted '
+              'videos. Set once — it applies to every profile on this server.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: NullFeedTheme.textMuted),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              maxLines: 4,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              decoration: const InputDecoration(
+                hintText: '# Netscape HTTP Cookie File …',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: NullFeedTheme.errorColor,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                FilledButton(
+                  onPressed: _busy ? null : _save,
+                  child: _busy
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+                if (status?.configured == true) ...[
+                  const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: _busy ? null : _remove,
+                    child: const Text(
+                      'Remove',
+                      style: TextStyle(color: NullFeedTheme.errorColor),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow(({bool configured, bool stale, String? updatedAt})? s) {
+    if (s == null || !s.configured) {
+      return const Row(
+        children: [
+          Icon(Icons.cancel_outlined, color: NullFeedTheme.textMuted, size: 18),
+          SizedBox(width: 8),
+          Text('Not connected'),
+        ],
+      );
+    }
+    if (s.stale) {
+      return const Row(
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: NullFeedTheme.errorColor,
+            size: 18,
+          ),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text('Cookies expired — paste fresh ones to keep playing'),
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        const Icon(
+          Icons.check_circle,
+          color: NullFeedTheme.successColor,
+          size: 18,
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text('Connected${_formatUpdated(s.updatedAt)}')),
+      ],
+    );
+  }
+
+  String _formatUpdated(String? iso) {
+    final dt = iso == null ? null : DateTime.tryParse(iso);
+    if (dt == null) return '';
+    return ' · updated ${dt.toLocal().toString().split('.').first}';
   }
 }
