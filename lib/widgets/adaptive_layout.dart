@@ -31,7 +31,18 @@ class AdaptiveLayout extends StatelessWidget {
     };
   }
 
+  /// Breakpoint at/above which a side NavigationRail replaces the bottom nav
+  /// (desktop browsers, large windows, iPad landscape).
+  static const double wideBreakpoint = 900;
+
+  static bool isWide(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= wideBreakpoint;
+
   static int gridCrossAxisCount(BuildContext context) {
+    // Make use of wide desktop/web viewports instead of capping at 3.
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= 1500) return 5;
+    if (width >= 1150) return 4;
     return switch (getDeviceType(context)) {
       DeviceType.tablet => 3,
       DeviceType.phone => 2,

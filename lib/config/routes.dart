@@ -14,6 +14,8 @@ import '../screens/channel_detail_screen.dart';
 import '../screens/video_player_screen.dart';
 import '../screens/search_screen.dart';
 import '../screens/queue_screen.dart';
+import '../widgets/adaptive_layout.dart';
+import 'theme.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -160,6 +162,34 @@ class _ScaffoldWithNav extends ConsumerWidget {
     ref.watch(webSocketConnectionProvider);
     final destinations = _destinations;
     final selectedIndex = _calculateSelectedIndex(context);
+
+    // Wide viewports (desktop/web, iPad landscape) get a side NavigationRail;
+    // phones keep the bottom nav.
+    if (AdaptiveLayout.isWide(context)) {
+      return Scaffold(
+        body: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (index) =>
+                  context.go(destinations[index].route),
+              labelType: NavigationRailLabelType.all,
+              backgroundColor: NullFeedTheme.surfaceColor,
+              destinations: [
+                for (final d in destinations)
+                  NavigationRailDestination(
+                    icon: Icon(d.icon),
+                    selectedIcon: Icon(d.activeIcon),
+                    label: Text(d.label),
+                  ),
+              ],
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: child),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       body: child,
