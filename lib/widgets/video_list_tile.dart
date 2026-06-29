@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,7 +59,9 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
 
   String? _downloadStateLabel(String? offlineStatus) {
     // Server-side caching is invisible; only the explicit on-device "save
-    // offline" state is surfaced (and only for cached/complete videos).
+    // offline" state is surfaced (and only for cached/complete videos). Web has
+    // no on-device storage, so there's no offline state at all.
+    if (kIsWeb) return null;
     if (widget.video.status != VideoStatus.complete) return null;
     if (offlineStatus == 'complete') return 'saved offline';
     if (offlineStatus == 'downloading') return 'saving offline';
@@ -66,6 +69,9 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
   }
 
   Widget _buildTrailingWidget() {
+    // No on-device storage on web, so there's no per-video "save offline"
+    // action at all.
+    if (kIsWeb) return const SizedBox.shrink();
     // The only per-video action is "save offline", available once a video is
     // cached (COMPLETE). Un-cached episodes show nothing — caching happens
     // quietly in the background.

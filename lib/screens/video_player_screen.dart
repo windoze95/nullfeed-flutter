@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,7 +99,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   Future<void> _initPlayer() async {
     try {
       // Path 0: Offline — play the local file without requiring network.
-      if (_offline.isAvailableOffline(widget.videoId)) {
+      // Skipped on web, which has no on-device files (and no dart:io File).
+      if (!kIsWeb && _offline.isAvailableOffline(widget.videoId)) {
         final localPath = _offline.getLocalPath(widget.videoId);
         if (localPath != null) {
           await _startOfflinePlayback(localPath);

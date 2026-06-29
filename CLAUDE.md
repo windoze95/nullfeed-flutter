@@ -18,16 +18,18 @@ If you need to update agent instructions, edit **this file** (`AGENTS.md`) and r
 
 ## Project Overview
 
-NullFeed is a self-hosted YouTube media center. This is the Flutter client
-targeting iOS only (Apple TV is covered by the separate native tvOS app,
-`nullfeed-tvos`).
+NullFeed is a self-hosted YouTube media center. This is the Flutter client,
+primarily for **iOS**, plus a **Flutter Web build (beta)**. (Apple TV is covered
+by the separate native tvOS app, `nullfeed-tvos`.) Web has no on-device storage,
+so the offline-save feature and its "Offline" tab are hidden on web (`kIsWeb`
+guards); keep new platform-specific code behind `kIsWeb` / conditional imports.
 
 **Stack:** Flutter 3.41+, Dart 3.11+, Riverpod 3.x, Freezed 3.x, GoRouter 17.x,
 Hive, Dio, video_player.
 
 ## CI Pipeline
 
-This repo has 6 CI checks that run on every PR:
+This repo has 7 CI checks that run on every PR:
 
 | Check | What it does |
 |-------|-------------|
@@ -35,6 +37,7 @@ This repo has 6 CI checks that run on every PR:
 | **Analyze** | `flutter analyze --fatal-infos --fatal-warnings` |
 | **Test** | `flutter test` |
 | **Build iOS** | `flutter build ios --release --no-codesign` (runs on `macos-latest`) |
+| **Build Web** | `flutter build web --release` (runs on `ubuntu-latest`) |
 | **Dependency Audit** | Warns on major version drift (non-blocking) |
 | **Agent Rules Sync** | Verifies all agent instruction files match `AGENTS.md` |
 
