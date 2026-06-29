@@ -1,13 +1,13 @@
 # NullFeed
 
-**A Self-Hosted YouTube Media Center -- iOS App**
+**A Self-Hosted YouTube Media Center -- iOS &amp; Web App**
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41+-02569B.svg)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11+-0175C2.svg)](https://dart.dev)
 [![iOS 17+](https://img.shields.io/badge/iOS-17%2B-000000.svg)](https://developer.apple.com/ios/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-NullFeed is a self-hosted YouTube media center that delivers a **streaming-service-quality** browsing and playback experience for your personal YouTube library. The Flutter app targets **iOS**, connecting to the [NullFeed backend](https://github.com/windoze95/nullfeed-backend) running on Docker (Unraid or any Docker host).
+NullFeed is a self-hosted YouTube media center that delivers a **streaming-service-quality** browsing and playback experience for your personal YouTube library. The Flutter app targets **iOS**, and also runs in the **browser** — the [NullFeed backend](https://github.com/windoze95/nullfeed-backend) (Docker, on Unraid or any Docker host) bakes in the web build and serves it at `/`, so there's no separate web app to deploy. On a desktop browser it uses a side navigation rail; offline-save is iOS-only (the browser has no on-device storage).
 
 Think Netflix, but for your YouTube subscriptions -- channel-centric navigation, resume-aware playback, multi-user profiles, and AI-powered discovery.
 
@@ -144,6 +144,14 @@ flutter build ios --release
 ```
 
 Open `ios/Runner.xcworkspace` in Xcode to archive and distribute via TestFlight or the App Store.
+
+### Web
+
+```bash
+flutter build web --release
+```
+
+You don't deploy the web build separately — the [NullFeed backend](https://github.com/windoze95/nullfeed-backend) image builds it and serves it at `/`. This `flutter build web` is the same step the backend's `web` Docker stage runs, and it's covered by the **Build Web** CI check.
 
 ### Code Generation
 
