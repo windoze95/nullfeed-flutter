@@ -46,6 +46,7 @@ class AppConstants {
   static const String channelPollAll = '$apiBase/channels/poll';
   static const String videos = '$apiBase/videos';
   static const String activeDownloads = '$apiBase/videos/downloads';
+  static const String videosPrewarm = '$apiBase/videos/prewarm';
   static const String queue = '$apiBase/queue';
   static const String feedHome = '$apiBase/feed/home';
   static const String feedContinueWatching = '$apiBase/feed/continue-watching';
@@ -97,6 +98,9 @@ class AppConstants {
   /// showing a graceful "taking longer than expected" message instead of an
   /// indefinite spinner.
   static const int previewMaxWaitSeconds = 180;
+
+  /// Max videos one /prewarm call asks the backend to pre-generate previews for.
+  static const int prewarmBatchSize = 12;
 
   // UI
   static const double cardAspectRatio = 16 / 9;

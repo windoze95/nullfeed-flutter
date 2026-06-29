@@ -192,6 +192,31 @@ void main() {
     });
   });
 
+  group('prewarmPreviews', () {
+    test('POSTs the prewarm endpoint with the ids', () async {
+      final adapter = _FakeAdapter((_) => _json({'enqueued': []}));
+      final api = apiWith(adapter);
+
+      await api.prewarmPreviews(['a', 'b']);
+
+      final req = adapter.requests.single;
+      expect(req.method, 'POST');
+      expect(req.uri.path, AppConstants.videosPrewarm);
+      expect(req.data, {
+        'video_ids': ['a', 'b'],
+      });
+    });
+
+    test('empty list makes no request', () async {
+      final adapter = _FakeAdapter((_) => _json({}));
+      final api = apiWith(adapter);
+
+      await api.prewarmPreviews([]);
+
+      expect(adapter.requests, isEmpty);
+    });
+  });
+
   group('getWsTicket', () {
     test('POSTs the ws-ticket endpoint and caches the result', () async {
       var n = 0;
