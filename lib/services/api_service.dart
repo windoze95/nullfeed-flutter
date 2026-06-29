@@ -480,6 +480,24 @@ class ApiService {
     await _dio.post('$_baseUrl${AppConstants.videoCache(videoId)}');
   });
 
+  /// Fetches detected sponsor/ad segments (seconds) for client-side skipping.
+  /// Returns an empty list when detection is still pending or finds no ads.
+  Future<List<({double start, double end})>> getAdSegments(String videoId) =>
+      _guard(() async {
+        final response = await _dio.get(
+          '$_baseUrl${AppConstants.videoAdSegments(videoId)}',
+        );
+        final data = response.data as Map<String, dynamic>;
+        final segments = (data['segments'] as List?) ?? const [];
+        return [
+          for (final s in segments)
+            (
+              start: (s['start'] as num).toDouble(),
+              end: (s['end'] as num).toDouble(),
+            ),
+        ];
+      });
+
   Future<void> requestPreview(String videoId) => _guard(() async {
     await _dio.post('$_baseUrl${AppConstants.videoPreview(videoId)}');
   });

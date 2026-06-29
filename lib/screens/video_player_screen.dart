@@ -47,6 +47,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   bool _showResumeBanner = false;
   Timer? _resumeBannerTimer;
 
+  /// Detected sponsor/ad segments (seconds); the playhead seeks past any it
+  /// enters. Empty until loaded, or when there are none / detection is pending.
+  List<({double start, double end})> _adSegments = const [];
+  bool _showSkipToast = false;
+  Timer? _skipToastTimer;
+
   /// Set once auto-advance has fired so a stream of post-completion ticks can't
   /// trigger it again.
   bool _advancing = false;
@@ -275,6 +281,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _maybeShowResumeBanner();
     _startProgressTimer();
     _scheduleHideControls();
+    unawaited(_loadAdSegments());
     return true;
   }
 
@@ -525,7 +532,44 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   void _onControllerUpdate() {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
+    _maybeSkipAd();
     if (controller.value.isCompleted) _handleCompletion();
+  }
+
+  /// Seek past any sponsor segment the playhead has entered, flashing a brief
+  /// "Skipped sponsor" toast. The 0.5s tail margin stops a seek to a segment's
+  /// end from immediately re-triggering the same segment.
+  void _maybeSkipAd() {
+    final controller = _controller;
+    if (controller == null || _adSegments.isEmpty) return;
+    final pos = controller.value.position.inMilliseconds / 1000.0;
+    for (final seg in _adSegments) {
+      if (pos >= seg.start && pos < seg.end - 0.5) {
+        controller.seekTo(Duration(milliseconds: (seg.end * 1000).round()));
+        _flashSkipToast();
+        break;
+      }
+    }
+  }
+
+  /// Best-effort: fetch detected sponsor segments for this video. No skipping
+  /// happens if detection is still pending, finds none, or is unavailable.
+  Future<void> _loadAdSegments() async {
+    try {
+      final segments = await _api.getAdSegments(widget.videoId);
+      if (mounted) setState(() => _adSegments = segments);
+    } catch (_) {
+      // Best-effort; leave _adSegments empty.
+    }
+  }
+
+  void _flashSkipToast() {
+    if (!mounted) return;
+    if (!_showSkipToast) setState(() => _showSkipToast = true);
+    _skipToastTimer?.cancel();
+    _skipToastTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _showSkipToast = false);
+    });
   }
 
   /// When the video plays through to the end, advance into the queue: consume
@@ -629,6 +673,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     _resumeBannerTimer?.cancel();
+    _skipToastTimer?.cancel();
     _previewTimeout?.cancel();
     _previewPollTimer?.cancel();
     _previewMaxWait?.cancel();
@@ -821,6 +866,32 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                         position: Duration(seconds: _resumeFromSeconds!),
                         onRestart: _restartFromStart,
                         onDismiss: _dismissResumeBanner,
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Sponsor-skip toast: shown briefly after auto-skipping a segment.
+              if (_showSkipToast && _isInitialized)
+                Positioned(
+                  bottom: 80,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Text(
+                          'Skipped sponsor',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
+                        ),
                       ),
                     ),
                   ),
