@@ -15,13 +15,15 @@ Think Netflix, but for your YouTube subscriptions -- channel-centric navigation,
 
 ## Features
 
-- **Instant Playback with Progressive Quality** -- Start watching immediately, even before a video finishes downloading to the server. The app begins playback with a low-quality stream, then seamlessly upgrades to the full-quality version once it's ready -- no buffering, no interruption.
+- **Instant Playback with Progressive Quality** -- Tap any episode and it starts immediately, even one that isn't cached on the server yet. Playback begins on a fast progressive stream, then seamlessly upgrades to the full-quality version once it's ready -- no buffering, no interruption.
 - **Channel-Centric Navigation** -- Browse your subscriptions like shows in a streaming app, with channel art, banners, and episode lists.
 - **Resume-Aware Home Screen** -- Continue Watching, New Episodes, and Recently Added rows keep you up to date.
 - **Native Video Playback** -- AVPlayer-backed playback with seeking and Picture-in-Picture.
 - **Multi-User Profiles** -- Netflix-style profile picker with independent subscriptions, watch history, and recommendations per user.
 - **AI-Powered Discover Tab** -- Claude-powered channel and video suggestions based on your subscription graph.
-- **Real-Time Download Tracking** -- WebSocket-driven progress indicators for active downloads.
+- **Invisible Caching** -- There's no download queue to manage. Following a channel quietly caches its episodes in the background so they open instantly; your library is simply the channels you follow plus watch-later.
+- **Sponsor-Skip** -- Automatically detects and skips sponsor/ad reads during playback (SponsorBlock + AI), with a brief "Skipped sponsor" note.
+- **Save Offline** -- Keep any video on your device for offline playback with one tap; saved videos live in the **Offline** tab.
 - **Adaptive Layout** -- Single codebase optimized for iPhone and iPad.
 - **Offline Metadata Caching** -- Hive-based local storage for user sessions and cached metadata.
 - **Dark Theme** -- Media-center-class dark UI with true black backgrounds and deep purple accents.
@@ -100,7 +102,7 @@ All application state is managed through [Riverpod](https://riverpod.dev/) provi
 | `channelsProvider`         | Channel list with subscribe/unsubscribe     |
 | `homeFeedProvider`         | Aggregated home feed data                   |
 | `discoverProvider`         | AI recommendation state                     |
-| `downloadProvider`         | Real-time download progress                 |
+| `offlineVideosProvider`    | On-device saved (offline) videos            |
 | `videoProvider`            | Video metadata and playback state           |
 | `settingsProvider`         | Server URL and quality preferences          |
 | `webSocketConnectionProvider` | WebSocket lifecycle tied to auth state   |
@@ -112,12 +114,12 @@ Declarative routing via [go_router](https://pub.dev/packages/go_router) with sup
 1. **Home** -- Resume-aware feed with Continue Watching, New Episodes, Recently Added rows
 2. **Library** -- All subscribed channels in a grid layout
 3. **Discover** -- AI-powered channel recommendations
-4. **Downloads** -- Active and completed download queue
+4. **Offline** -- Videos saved on this device for offline playback
 5. **Settings** -- Server connection, quality preferences, profile management
 
 ### Networking -- Dio
 
-All backend communication uses [Dio](https://pub.dev/packages/dio) with interceptors for request logging, retry logic, and user session headers. WebSocket connections are managed separately via `web_socket_channel` for real-time events: download progress, completion notifications, new episode alerts, and recommendation refresh signals.
+All backend communication uses [Dio](https://pub.dev/packages/dio) with interceptors for request logging, retry logic, and user session headers. WebSocket connections are managed separately via `web_socket_channel` for real-time events: cache/download completion, new-episode alerts, sponsor-segment readiness, and recommendation refresh signals.
 
 ### Data Models -- Freezed
 
