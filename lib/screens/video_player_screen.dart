@@ -232,6 +232,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     Video video, {
     bool isPreview = false,
     bool reportErrors = true,
+    Duration initTimeout = const Duration(
+      seconds: AppConstants.playbackInitTimeoutSeconds,
+    ),
   }) async {
     // A WS event and a poll tick can race to start playback; only the first
     // caller proceeds (checked-and-set synchronously, before any await).
@@ -241,7 +244,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
 
     try {
-      await controller.initialize();
+      // Bound init so a stalled source (e.g. a wedged instant-stream proxy)
+      // can't leave the player spinning forever — on timeout we treat it as a
+      // load failure so the caller can fall back / surface an error.
+      await controller.initialize().timeout(initTimeout);
     } catch (e) {
       controller.dispose();
       _startingPlayback = false;
