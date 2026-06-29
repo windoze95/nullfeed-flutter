@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
@@ -64,6 +65,9 @@ class OfflineService {
     String? title,
     String? youtubeVideoId,
   }) async {
+    // Web has no on-device filesystem; offline save is unsupported there. The
+    // UI hides it, but guard defensively so a stray call can't throw.
+    if (kIsWeb) return;
     // In-flight guard: a second tap must not start a concurrent download
     // writing to the same file. Registered before the first await.
     if (_cancelTokens.containsKey(videoId)) return;

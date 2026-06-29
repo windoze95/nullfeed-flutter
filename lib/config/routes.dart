@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -121,29 +122,34 @@ class _ScaffoldWithNav extends ConsumerWidget {
   final Widget child;
   const _ScaffoldWithNav({required this.child});
 
+  static const List<_NavDest> _allDestinations = [
+    _NavDest('/home', Icons.home_outlined, Icons.home, 'Home'),
+    _NavDest(
+      '/library',
+      Icons.video_library_outlined,
+      Icons.video_library,
+      'Library',
+    ),
+    _NavDest('/discover', Icons.explore_outlined, Icons.explore, 'Discover'),
+    _NavDest(
+      '/downloads',
+      Icons.offline_pin_outlined,
+      Icons.offline_pin,
+      'Offline',
+    ),
+    _NavDest('/settings', Icons.settings_outlined, Icons.settings, 'Settings'),
+  ];
+
+  /// The Offline tab is on-device storage, which the web build doesn't have, so
+  /// it's dropped on web.
+  static List<_NavDest> get _destinations => kIsWeb
+      ? _allDestinations.where((d) => d.route != '/downloads').toList()
+      : _allDestinations;
+
   static int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    if (location.startsWith('/home')) return 0;
-    if (location.startsWith('/library')) return 1;
-    if (location.startsWith('/discover')) return 2;
-    if (location.startsWith('/downloads')) return 3;
-    if (location.startsWith('/settings')) return 4;
-    return 0;
-  }
-
-  void _onTap(BuildContext context, int index) {
-    switch (index) {
-      case 0:
-        context.go('/home');
-      case 1:
-        context.go('/library');
-      case 2:
-        context.go('/discover');
-      case 3:
-        context.go('/downloads');
-      case 4:
-        context.go('/settings');
-    }
+    final index = _destinations.indexWhere((d) => location.startsWith(d.route));
+    return index < 0 ? 0 : index;
   }
 
   @override
@@ -152,42 +158,32 @@ class _ScaffoldWithNav extends ConsumerWidget {
     // events keep flowing and a Settings-triggered invalidate reconnects
     // immediately instead of waiting for the Home tab to be visited.
     ref.watch(webSocketConnectionProvider);
+    final destinations = _destinations;
     final selectedIndex = _calculateSelectedIndex(context);
 
     return Scaffold(
       body: child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedIndex,
-        onTap: (index) => _onTap(context, index),
+        onTap: (index) => context.go(destinations[index].route),
         type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.video_library_outlined),
-            activeIcon: Icon(Icons.video_library),
-            label: 'Library',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            activeIcon: Icon(Icons.explore),
-            label: 'Discover',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.offline_pin_outlined),
-            activeIcon: Icon(Icons.offline_pin),
-            label: 'Offline',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
+        items: [
+          for (final d in destinations)
+            BottomNavigationBarItem(
+              icon: Icon(d.icon),
+              activeIcon: Icon(d.activeIcon),
+              label: d.label,
+            ),
         ],
       ),
     );
   }
+}
+
+class _NavDest {
+  final String route;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  const _NavDest(this.route, this.icon, this.activeIcon, this.label);
 }

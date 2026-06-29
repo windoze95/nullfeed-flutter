@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/websocket_service.dart';
 import '../services/storage_service.dart';
@@ -57,8 +58,9 @@ final webSocketConnectionProvider = Provider<void>((ref) {
         ref.invalidate(newEpisodesProvider);
         ref.invalidate(recentlyAddedProvider);
         ref.invalidate(homeFeedProvider);
-        // Auto-offline: download to device if enabled for this channel
-        if (videoId != null && channelId != null) {
+        // Auto-offline: download to device if enabled for this channel.
+        // Web has no on-device storage, so it never auto-saves.
+        if (!kIsWeb && videoId != null && channelId != null) {
           final storageService = ref.read(storageServiceProvider);
           if (storageService.isAutoOfflineEnabled(channelId)) {
             final offlineService = ref.read(offlineServiceProvider);
