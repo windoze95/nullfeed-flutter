@@ -12,21 +12,15 @@ import 'progress_bar.dart';
 class VideoListTile extends ConsumerStatefulWidget {
   final Video video;
   final VoidCallback? onTap;
-  final VoidCallback? onDownload;
-  final VoidCallback? onCancel;
 
   /// Opens the per-video actions menu (long-press or the ⋯ button).
   final VoidCallback? onMenu;
-  final double? downloadProgress;
 
   const VideoListTile({
     super.key,
     required this.video,
     this.onTap,
-    this.onDownload,
-    this.onCancel,
     this.onMenu,
-    this.downloadProgress,
   });
 
   @override
@@ -63,141 +57,75 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
   }
 
   String? _downloadStateLabel(String? offlineStatus) {
-    switch (widget.video.status) {
-      case VideoStatus.complete:
-        if (offlineStatus == 'complete') return 'downloaded';
-        if (offlineStatus == 'downloading') return 'downloading to device';
-        return null;
-      case VideoStatus.downloading:
-      case VideoStatus.pending:
-        return 'downloading';
-      case VideoStatus.cataloged:
-        return null;
-      case VideoStatus.failed:
-        return 'download failed';
-    }
+    // Server-side caching is invisible; only the explicit on-device "save
+    // offline" state is surfaced (and only for cached/complete videos).
+    if (widget.video.status != VideoStatus.complete) return null;
+    if (offlineStatus == 'complete') return 'saved offline';
+    if (offlineStatus == 'downloading') return 'saving offline';
+    return null;
   }
 
   Widget _buildTrailingWidget() {
+    // The only per-video action is "save offline", available once a video is
+    // cached (COMPLETE). Un-cached episodes show nothing — caching happens
+    // quietly in the background.
+    if (widget.video.status != VideoStatus.complete) {
+      return const SizedBox.shrink();
+    }
+
     final offlineStatus = ref.watch(offlineStatusProvider(widget.video.id));
     final offlineProgress = ref.watch(offlineProgressProvider);
 
-    switch (widget.video.status) {
-      case VideoStatus.complete:
-        if (offlineStatus == 'complete') {
-          return const Icon(
-            Icons.offline_pin,
-            color: NullFeedTheme.successColor,
-          );
-        }
-        if (offlineStatus == 'downloading') {
-          final progress = offlineProgress[widget.video.id];
-          return SizedBox(
-            width: 44,
-            height: 44,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    value: progress,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(
-                    Icons.stop_rounded,
-                    size: 14,
-                    color: NullFeedTheme.textMuted,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: 44,
-                  ),
-                  tooltip: 'Cancel download',
-                  onPressed: () {
-                    ref
-                        .read(offlineServiceProvider)
-                        .cancelDownload(widget.video.id);
-                    ref.read(offlineVideosProvider.notifier).refresh();
-                  },
-                ),
-              ],
-            ),
-          );
-        }
-        return IconButton(
-          icon: const Icon(
-            Icons.cloud_download,
-            color: NullFeedTheme.textMuted,
-          ),
-          onPressed: () async {
-            final offlineService = ref.read(offlineServiceProvider);
-            await offlineService.downloadToDevice(
-              widget.video.id,
-              channelId: widget.video.channelId,
-              title: widget.video.title,
-              youtubeVideoId: widget.video.youtubeVideoId,
-            );
-            ref.read(offlineVideosProvider.notifier).refresh();
-          },
-          tooltip: 'Save for offline',
-        );
-      case VideoStatus.downloading:
-      case VideoStatus.pending:
-        return SizedBox(
-          width: 44,
-          height: 44,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  value: widget.downloadProgress != null
-                      ? widget.downloadProgress! / 100.0
-                      : null,
-                ),
-              ),
-              if (widget.onCancel != null)
-                IconButton(
-                  icon: const Icon(
-                    Icons.stop_rounded,
-                    size: 14,
-                    color: NullFeedTheme.textMuted,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: 44,
-                  ),
-                  tooltip: 'Cancel download',
-                  onPressed: widget.onCancel,
-                ),
-            ],
-          ),
-        );
-      case VideoStatus.cataloged:
-        return IconButton(
-          icon: const Icon(
-            Icons.download_rounded,
-            color: NullFeedTheme.primaryColor,
-          ),
-          onPressed: widget.onDownload,
-          tooltip: 'Download to server',
-        );
-      case VideoStatus.failed:
-        return IconButton(
-          icon: const Icon(Icons.refresh, color: NullFeedTheme.errorColor),
-          onPressed: widget.onDownload,
-          tooltip: 'Retry download',
-        );
+    if (offlineStatus == 'complete') {
+      return const Icon(Icons.offline_pin, color: NullFeedTheme.successColor);
     }
+    if (offlineStatus == 'downloading') {
+      final progress = offlineProgress[widget.video.id];
+      return SizedBox(
+        width: 44,
+        height: 44,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, value: progress),
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.stop_rounded,
+                size: 14,
+                color: NullFeedTheme.textMuted,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              tooltip: 'Cancel offline save',
+              onPressed: () {
+                ref
+                    .read(offlineServiceProvider)
+                    .cancelDownload(widget.video.id);
+                ref.read(offlineVideosProvider.notifier).refresh();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+    return IconButton(
+      icon: const Icon(Icons.cloud_download, color: NullFeedTheme.textMuted),
+      onPressed: () async {
+        final offlineService = ref.read(offlineServiceProvider);
+        await offlineService.downloadToDevice(
+          widget.video.id,
+          channelId: widget.video.channelId,
+          title: widget.video.title,
+          youtubeVideoId: widget.video.youtubeVideoId,
+        );
+        ref.read(offlineVideosProvider.notifier).refresh();
+      },
+      tooltip: 'Save for offline',
+    );
   }
 
   @override

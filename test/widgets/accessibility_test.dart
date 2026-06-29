@@ -161,9 +161,7 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('list tile merges title, date and download state', (
-    tester,
-  ) async {
+  testWidgets('list tile merges title, date and offline state', (tester) async {
     final handle = tester.ensureSemantics();
     final uploaded = DateTime.utc(2026, 1, 2);
 
@@ -182,14 +180,14 @@ void main() {
 
     final date = DateFormat.yMMMd().format(uploaded);
     expect(
-      find.bySemanticsLabel('Big Buck Bunny, $date, downloaded'),
+      find.bySemanticsLabel('Big Buck Bunny, $date, saved offline'),
       findsOneWidget,
     );
 
     handle.dispose();
   });
 
-  testWidgets('list tile reflects a downloading state and an operable cancel', (
+  testWidgets('list tile shows no caching status for an un-cached episode', (
     tester,
   ) async {
     final handle = tester.ensureSemantics();
@@ -197,14 +195,16 @@ void main() {
     await pumpWidget(
       tester,
       VideoListTile(
-        video: makeVideo(title: 'Clip', status: VideoStatus.downloading),
+        video: makeVideo(title: 'Clip', status: VideoStatus.cataloged),
         onTap: () {},
-        onCancel: () {},
       ),
     );
 
-    expect(find.bySemanticsLabel('Clip, downloading'), findsOneWidget);
-    expect(find.byTooltip('Cancel download'), findsOneWidget);
+    // Caching is invisible: no download/cancel/progress affordance, and the
+    // semantic label carries no download state.
+    expect(find.bySemanticsLabel('Clip'), findsOneWidget);
+    expect(find.byTooltip('Cancel download'), findsNothing);
+    expect(find.byTooltip('Download to server'), findsNothing);
 
     handle.dispose();
   });

@@ -398,14 +398,6 @@ class ApiService {
     await _dio.delete('$_baseUrl${AppConstants.channelUnsubscribe(channelId)}');
   });
 
-  // Downloads
-  Future<List<Video>> getActiveDownloads() => _guard(() async {
-    final response = await _dio.get('$_baseUrl${AppConstants.activeDownloads}');
-    return (response.data as List)
-        .map((json) => Video.fromJson(json as Map<String, dynamic>))
-        .toList();
-  });
-
   // Videos
   Future<Video> getVideo(String id) => _guard(() async {
     final response = await _dio.get('$_baseUrl${AppConstants.videoDetail(id)}');
@@ -458,18 +450,6 @@ class ApiService {
 
   Future<void> deleteVideo(String videoId) => _guard(() async {
     await _dio.delete('$_baseUrl${AppConstants.videoDetail(videoId)}');
-  });
-
-  Future<void> downloadVideo(String videoId, {String? quality}) =>
-      _guard(() async {
-        await _dio.post(
-          '$_baseUrl${AppConstants.videoDownload(videoId)}',
-          data: quality != null ? {'quality': quality} : null,
-        );
-      });
-
-  Future<void> cancelDownload(String videoId) => _guard(() async {
-    await _dio.post('$_baseUrl${AppConstants.videoCancel(videoId)}');
   });
 
   /// Records an evictable cache claim on [videoId] and (server-side) kicks off
