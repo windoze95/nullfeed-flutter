@@ -217,6 +217,37 @@ void main() {
     });
   });
 
+  group('getAdSegments', () {
+    test('GETs the endpoint and parses segments (ints and doubles)', () async {
+      final adapter = _FakeAdapter(
+        (_) => _json({
+          'status': 'READY',
+          'segments': [
+            {'start': 10.0, 'end': 25.5, 'category': 'sponsor'},
+            {'start': 100, 'end': 130, 'category': 'selfpromo'},
+          ],
+        }),
+      );
+      final api = apiWith(adapter);
+
+      final segs = await api.getAdSegments('vid-7');
+
+      final req = adapter.requests.single;
+      expect(req.method, 'GET');
+      expect(req.uri.path, AppConstants.videoAdSegments('vid-7'));
+      expect(segs, [(start: 10.0, end: 25.5), (start: 100.0, end: 130.0)]);
+    });
+
+    test('returns an empty list when detection is pending', () async {
+      final adapter = _FakeAdapter(
+        (_) => _json({'status': 'PENDING', 'segments': []}),
+      );
+      final api = apiWith(adapter);
+
+      expect(await api.getAdSegments('vid-8'), isEmpty);
+    });
+  });
+
   group('getWsTicket', () {
     test('POSTs the ws-ticket endpoint and caches the result', () async {
       var n = 0;
