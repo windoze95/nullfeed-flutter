@@ -1,14 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/video.dart';
 import '../providers/channel_provider.dart';
-import '../providers/download_progress_provider.dart';
 import '../providers/feed_provider.dart';
-import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/queue_action.dart';
@@ -26,9 +22,6 @@ class ChannelDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
-  Timer? _pollTimer;
-  final Set<String> _pendingVideoIds = {};
-
   @override
   void initState() {
     super.initState();
@@ -60,52 +53,6 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     } catch (_) {
       // Non-critical — channel still loads with cached images
     }
-  }
-
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startPolling() {
-    if (_pollTimer?.isActive ?? false) return;
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      ref.invalidate(channelVideosProvider(widget.channelId));
-    });
-  }
-
-  void _stopPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
-  }
-
-  void _checkPollingNeeded(List<Video> videos) {
-    for (final id in _pendingVideoIds.toList()) {
-      final video = videos.where((v) => v.id == id).firstOrNull;
-      if (video != null && video.status != VideoStatus.cataloged) {
-        _pendingVideoIds.remove(id);
-      }
-    }
-
-    final hasInProgress =
-        videos.any((v) => v.isInProgress) || _pendingVideoIds.isNotEmpty;
-    if (hasInProgress) {
-      _startPolling();
-    } else {
-      _stopPolling();
-    }
-  }
-
-  List<Video> _applyOptimisticUpdates(List<Video> videos) {
-    if (_pendingVideoIds.isEmpty) return videos;
-    return videos.map((v) {
-      if (_pendingVideoIds.contains(v.id) &&
-          v.status == VideoStatus.cataloged) {
-        return v.copyWith(status: VideoStatus.pending);
-      }
-      return v;
-    }).toList();
   }
 
   void _invalidateChannel() {
@@ -179,10 +126,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   Widget build(BuildContext context) {
     final channelAsync = ref.watch(channelDetailProvider(widget.channelId));
     final videosAsync = ref.watch(channelVideosProvider(widget.channelId));
-    final progressMap = ref.watch(downloadProgressProvider);
     final padding = AdaptiveLayout.contentPadding(context);
-
-    videosAsync.whenData(_checkPollingNeeded);
 
     return Scaffold(
       // The loaded state brings its own SliverAppBar; loading/error states
@@ -352,7 +296,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
               ),
               videosAsync.when(
                 data: (videos) {
-                  final displayVideos = _applyOptimisticUpdates(videos);
+                  final displayVideos = videos;
                   if (displayVideos.isEmpty) {
                     return SliverToBoxAdapter(
                       child: Padding(
@@ -371,23 +315,16 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                       final video = displayVideos[index];
                       return VideoListTile(
                         video: video,
-                        downloadProgress: progressMap[video.id],
-                        onTap: (video.isPlayable || video.isInProgress)
-                            ? () async {
-                                await context.push('/player/${video.id}');
-                                if (!mounted) return;
-                                ref.invalidate(
-                                  channelVideosProvider(widget.channelId),
-                                );
-                                invalidateFeedProviders(ref);
-                              }
-                            : null,
-                        onDownload: video.isDownloadable
-                            ? () => _onDownload(video)
-                            : null,
-                        onCancel: video.isInProgress
-                            ? () => _onCancelDownload(video)
-                            : null,
+                        // Every episode plays on tap — cached or not (an
+                        // un-cached one starts via instant-stream).
+                        onTap: () async {
+                          await context.push('/player/${video.id}');
+                          if (!mounted) return;
+                          ref.invalidate(
+                            channelVideosProvider(widget.channelId),
+                          );
+                          invalidateFeedProviders(ref);
+                        },
                         onMenu: () => _showVideoMenu(video),
                       );
                     }, childCount: displayVideos.length),
@@ -485,16 +422,6 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
               video: video,
               onTap: () => Navigator.pop(sheetContext),
             ),
-            if (video.status == VideoStatus.complete)
-              ListTile(
-                leading: const Icon(Icons.download_rounded),
-                title: const Text('Re-download'),
-                subtitle: const Text('Fetch the video from YouTube again'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _onDownload(video);
-                },
-              ),
             ListTile(
               leading: const Icon(
                 Icons.delete_outline,
@@ -551,43 +478,6 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
-    }
-  }
-
-  Future<void> _onCancelDownload(Video video) async {
-    final api = ref.read(apiServiceProvider);
-    try {
-      await api.cancelDownload(video.id);
-      ref.invalidate(channelVideosProvider(widget.channelId));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to cancel download: ${e.message}')),
-        );
-      }
-    }
-  }
-
-  Future<void> _onDownload(Video video) async {
-    final api = ref.read(apiServiceProvider);
-    final quality = ref.read(settingsProvider).preferredQuality;
-
-    setState(() {
-      _pendingVideoIds.add(video.id);
-    });
-
-    try {
-      await api.downloadVideo(video.id, quality: quality);
-      if (!mounted) return;
-      _startPolling();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _pendingVideoIds.remove(video.id);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to start download: ${e.message}')),
-      );
     }
   }
 }

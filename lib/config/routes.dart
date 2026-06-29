@@ -177,9 +177,9 @@ class _ScaffoldWithNav extends ConsumerWidget {
             label: 'Discover',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.download_outlined),
-            activeIcon: Icon(Icons.download),
-            label: 'Downloads',
+            icon: Icon(Icons.offline_pin_outlined),
+            activeIcon: Icon(Icons.offline_pin),
+            label: 'Offline',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_outlined),
