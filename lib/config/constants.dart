@@ -40,6 +40,8 @@ class AppConstants {
   static const String wsTicket = '$apiBase/auth/ws-ticket';
   static const String youtubeResolve = '$apiBase/youtube/resolve';
   static const String youtubeSuggestions = '$apiBase/youtube/suggestions';
+  static const String settingsYoutubeCookies =
+      '$apiBase/settings/youtube-cookies';
   static const String channels = '$apiBase/channels';
   static const String channelSubscribe = '$apiBase/channels/subscribe';
   static const String channelSubscribeBulk = '$apiBase/channels/subscribe-bulk';

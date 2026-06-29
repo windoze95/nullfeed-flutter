@@ -452,6 +452,35 @@ class ApiService {
     await _dio.delete('$_baseUrl${AppConstants.videoDetail(videoId)}');
   });
 
+  // YouTube cookies (admin only) — enables age-restricted / members-only videos.
+  ({bool configured, bool stale, String? updatedAt}) _parseCookieStatus(
+    Map<String, dynamic> data,
+  ) => (
+    configured: data['configured'] == true,
+    stale: data['stale'] == true,
+    updatedAt: data['updated_at'] as String?,
+  );
+
+  Future<({bool configured, bool stale, String? updatedAt})>
+  getYoutubeCookiesStatus() => _guard(() async {
+    final r = await _dio.get('$_baseUrl${AppConstants.settingsYoutubeCookies}');
+    return _parseCookieStatus(r.data as Map<String, dynamic>);
+  });
+
+  Future<({bool configured, bool stale, String? updatedAt})> saveYoutubeCookies(
+    String cookies,
+  ) => _guard(() async {
+    final r = await _dio.put(
+      '$_baseUrl${AppConstants.settingsYoutubeCookies}',
+      data: {'cookies': cookies},
+    );
+    return _parseCookieStatus(r.data as Map<String, dynamic>);
+  });
+
+  Future<void> clearYoutubeCookies() => _guard(() async {
+    await _dio.delete('$_baseUrl${AppConstants.settingsYoutubeCookies}');
+  });
+
   /// Records an evictable cache claim on [videoId] and (server-side) kicks off
   /// its HQ download, without it showing in the Downloads tab. Called when the
   /// user starts instant playback of a not-yet-downloaded video so the player
