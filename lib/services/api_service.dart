@@ -439,6 +439,15 @@ class ApiService {
     return '$_baseUrl${AppConstants.videoStream(id)}?ticket=$ticket';
   }
 
+  /// Builds the authenticated instant-start stream URL for [id]. The backend
+  /// resolves and reverse-proxies a progressive source so a not-yet-downloaded
+  /// video plays immediately; like [getVideoStreamUrl] it carries a short-lived
+  /// playback ticket. Throws [ApiException] if the ticket can't be minted.
+  Future<String> getInstantStreamUrl(String id) async {
+    final ticket = await getPlaybackTicket(id);
+    return '$_baseUrl${AppConstants.videoInstantStream(id)}?ticket=$ticket';
+  }
+
   Future<void> updateProgress(String videoId, int positionSeconds) =>
       _guard(() async {
         await _dio.put(

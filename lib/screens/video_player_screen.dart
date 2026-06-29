@@ -113,7 +113,26 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         return;
       }
 
-      // Path 3: No preview yet — request one, show spinner, listen for it
+      // Path 3: Not downloaded yet — start instantly by proxying a progressive
+      // source stream, then listen for an HQ download to swap in if one lands.
+      // This replaces waiting for a preview file to be generated on a cold
+      // press; the preview path below stays as a fallback.
+      try {
+        final instantUrl = await _api.getInstantStreamUrl(widget.videoId);
+        if (await _startPlayback(
+          instantUrl,
+          video,
+          isPreview: true,
+          reportErrors: false,
+        )) {
+          _listenForHqReady();
+          return;
+        }
+      } on ApiException {
+        // Couldn't mint a ticket / reach the server — fall back to a preview.
+      }
+
+      // Fallback: request a preview, show spinner, and listen for it.
       try {
         await _api.requestPreview(widget.videoId);
       } catch (_) {
@@ -189,14 +208,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _scheduleHideControls();
   }
 
-  Future<void> _startPlayback(
+  /// Starts playback from [url]. Returns true once playback has started, false
+  /// if it was superseded (a start race lost) or the source failed to load.
+  /// When [reportErrors] is false a failure is returned silently without
+  /// surfacing an error screen, so the caller can fall back to another source.
+  Future<bool> _startPlayback(
     String url,
     Video video, {
     bool isPreview = false,
+    bool reportErrors = true,
   }) async {
     // A WS event and a poll tick can race to start playback; only the first
     // caller proceeds (checked-and-set synchronously, before any await).
-    if (_startingPlayback || _isInitialized) return;
+    if (_startingPlayback || _isInitialized) return false;
     _startingPlayback = true;
 
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
@@ -206,10 +230,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     } catch (e) {
       controller.dispose();
       _startingPlayback = false;
-      if (mounted) {
+      if (mounted && reportErrors) {
         setState(() => _error = 'Failed to load video: $e');
       }
-      return;
+      return false;
     }
 
     controller.addListener(_onControllerUpdate);
@@ -226,7 +250,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     if (!mounted) {
       controller.dispose();
       _startingPlayback = false;
-      return;
+      return false;
     }
 
     setState(() {
@@ -248,6 +272,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _maybeShowResumeBanner();
     _startProgressTimer();
     _scheduleHideControls();
+    return true;
   }
 
   void _startProgressTimer() {

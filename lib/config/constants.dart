@@ -75,6 +75,8 @@ class AppConstants {
   static String videoPlaybackTicket(String id) =>
       '$apiBase/videos/$id/playback-ticket';
   static String videoStream(String id) => '$apiBase/videos/$id/stream';
+  static String videoInstantStream(String id) =>
+      '$apiBase/videos/$id/instant-stream';
   static String videoProgress(String id) => '$apiBase/videos/$id/progress';
   static String videoDownload(String id) => '$apiBase/videos/$id/download';
   static String videoCancel(String id) => '$apiBase/videos/$id/cancel';
