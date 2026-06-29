@@ -89,6 +89,8 @@ final webSocketConnectionProvider = Provider<void>((ref) {
         }
       case WebSocketEventType.previewReady:
         break; // Player screen listens directly via wsService.events
+      case WebSocketEventType.adSegmentsReady:
+        break; // Player screen listens directly via wsService.events
       case WebSocketEventType.newEpisode:
         // New content landed server-side — refresh the home feed in place.
         ref.invalidate(newEpisodesProvider);
