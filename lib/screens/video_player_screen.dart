@@ -67,6 +67,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   late final OfflineService _offline;
   StreamSubscription<WebSocketEvent>? _wsSubscription;
 
+  /// Separate, long-lived subscription used only to pick up sponsor segments
+  /// that finish detecting after playback has already started (first play).
+  StreamSubscription<WebSocketEvent>? _adWsSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -557,10 +561,32 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   Future<void> _loadAdSegments() async {
     try {
       final segments = await _api.getAdSegments(widget.videoId);
-      if (mounted) setState(() => _adSegments = segments);
+      if (!mounted) return;
+      setState(() => _adSegments = segments);
+      // None yet means detection is still running (first play). Apply them when
+      // the backend signals they're ready so this session skips too.
+      if (segments.isEmpty) _listenForAdSegmentsReady();
     } catch (_) {
       // Best-effort; leave _adSegments empty.
     }
+  }
+
+  void _listenForAdSegmentsReady() {
+    _adWsSubscription?.cancel();
+    final wsService = ref.read(webSocketServiceProvider);
+    _adWsSubscription = wsService.events.listen((event) async {
+      if (event.type == WebSocketEventType.adSegmentsReady &&
+          event.data['video_id'] == widget.videoId) {
+        _adWsSubscription?.cancel();
+        _adWsSubscription = null;
+        try {
+          final segments = await _api.getAdSegments(widget.videoId);
+          if (mounted) setState(() => _adSegments = segments);
+        } catch (_) {
+          // Best-effort.
+        }
+      }
+    });
   }
 
   void _flashSkipToast() {
@@ -670,6 +696,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   @override
   void dispose() {
     _wsSubscription?.cancel();
+    _adWsSubscription?.cancel();
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     _resumeBannerTimer?.cancel();
