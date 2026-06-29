@@ -125,6 +125,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
           isPreview: true,
           reportErrors: false,
         )) {
+          // Cache the HQ version in the background (evictable, not a library
+          // download) so the player can swap preview -> HQ. Best-effort.
+          unawaited(_api.cacheVideo(widget.videoId).catchError((_) {}));
           _listenForHqReady();
           return;
         }

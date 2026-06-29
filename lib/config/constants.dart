@@ -80,6 +80,7 @@ class AppConstants {
   static String videoProgress(String id) => '$apiBase/videos/$id/progress';
   static String videoDownload(String id) => '$apiBase/videos/$id/download';
   static String videoCancel(String id) => '$apiBase/videos/$id/cancel';
+  static String videoCache(String id) => '$apiBase/videos/$id/cache';
   static String videoPreview(String id) => '$apiBase/videos/$id/preview';
   static String videoPreviewStream(String id) =>
       '$apiBase/videos/$id/preview-stream';
