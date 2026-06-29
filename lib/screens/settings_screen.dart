@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
@@ -10,6 +11,7 @@ import '../providers/websocket_provider.dart';
 import '../services/api_service.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
+import '../utils/browser_link.dart';
 import '../widgets/adaptive_layout.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -420,6 +422,7 @@ class _YoutubeCookiesSectionState
   @override
   Widget build(BuildContext context) {
     final status = _status;
+    final browser = detectedBrowserName();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -446,6 +449,26 @@ class _YoutubeCookiesSectionState
                 context,
               ).textTheme.bodySmall?.copyWith(color: NullFeedTheme.textMuted),
             ),
+            if (kIsWeb) ...[
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => openInNewTab(cookieExtensionUrl()),
+                  icon: const Icon(Icons.extension_outlined, size: 18),
+                  label: Text(
+                    browser == null
+                        ? "Get the 'cookies.txt' extension"
+                        : "Get the 'cookies.txt' extension for $browser",
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _controller,
