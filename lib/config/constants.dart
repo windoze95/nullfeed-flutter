@@ -100,6 +100,12 @@ class AppConstants {
   /// indefinite spinner.
   static const int previewMaxWaitSeconds = 180;
 
+  /// Cap on how long a single playback source may take to initialize. If a
+  /// stream (especially the proxied instant-stream) stalls while loading, the
+  /// player abandons it instead of spinning forever — for the cold-press path
+  /// that means falling back to a preview; for others, a graceful error.
+  static const int playbackInitTimeoutSeconds = 25;
+
   /// Max videos one /prewarm call asks the backend to pre-generate previews for.
   static const int prewarmBatchSize = 12;
 
