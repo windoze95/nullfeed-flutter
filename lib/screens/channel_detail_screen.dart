@@ -422,62 +422,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
               video: video,
               onTap: () => Navigator.pop(sheetContext),
             ),
-            ListTile(
-              leading: const Icon(
-                Icons.delete_outline,
-                color: NullFeedTheme.errorColor,
-              ),
-              title: const Text('Remove from library'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _confirmRemove(video);
-              },
-            ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _confirmRemove(Video video) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: NullFeedTheme.cardColor,
-        title: const Text('Remove from library?'),
-        content: Text(
-          '"${video.title}" will be removed from your library. The downloaded '
-          'file is deleted from the server once no other profile has it.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Remove',
-              style: TextStyle(color: NullFeedTheme.errorColor),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await ref.read(apiServiceProvider).deleteVideo(video.id);
-      if (!mounted) return;
-      ref.invalidate(channelVideosProvider(widget.channelId));
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Removed from library')));
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
-    }
   }
 }
