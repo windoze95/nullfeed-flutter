@@ -11,6 +11,7 @@ import '../providers/feed_provider.dart';
 import '../providers/offline_provider.dart';
 import 'progress_bar.dart';
 import 'queue_action.dart';
+import 'unplayable_badge.dart';
 
 class VideoCard extends ConsumerStatefulWidget {
   final Video video;
@@ -45,6 +46,8 @@ class _VideoCardState extends ConsumerState<VideoCard> {
     final channel = widget.channel;
     if (channel != null) parts.add(channel.name);
     if (offlineStatus == 'complete') parts.add('downloaded');
+    final reason = widget.video.activeUnplayableReason;
+    if (reason != null) parts.add(reason.label);
     return parts.join(', ');
   }
 
@@ -142,6 +145,19 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                                     Icons.play_circle_outline,
                                     color: NullFeedTheme.textMuted,
                                     size: 40,
+                                  ),
+                                ),
+
+                              // Why this video can't play (age-restricted,
+                              // members-only, …) — hidden once a local file
+                              // makes it playable anyway.
+                              if (widget.video.activeUnplayableReason != null)
+                                Positioned(
+                                  left: 6,
+                                  top: 6,
+                                  child: UnplayableBadge(
+                                    reason:
+                                        widget.video.activeUnplayableReason!,
                                   ),
                                 ),
 

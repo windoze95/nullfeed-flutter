@@ -6,6 +6,7 @@ import '../config/theme.dart';
 import '../models/video.dart';
 import '../providers/queue_provider.dart';
 import '../services/api_service.dart';
+import 'unplayable_badge.dart';
 
 /// Adds or removes [video] from the watch-later queue and reports the outcome
 /// with a snackbar via the nearest [ScaffoldMessenger].
@@ -101,6 +102,8 @@ Future<void> showVideoActionsSheet(
               style: const TextStyle(color: NullFeedTheme.textMuted),
             ),
           ),
+          if (video.activeUnplayableReason != null)
+            UnplayableReasonTile(reason: video.activeUnplayableReason!),
           if (onPlay != null)
             ListTile(
               leading: const Icon(Icons.play_arrow),

@@ -8,6 +8,7 @@ import '../providers/feed_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/queue_action.dart';
+import '../widgets/unplayable_badge.dart';
 import '../widgets/video_list_tile.dart';
 import '../widgets/adaptive_layout.dart';
 import '../config/theme.dart';
@@ -418,6 +419,8 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                 style: const TextStyle(color: NullFeedTheme.textMuted),
               ),
             ),
+            if (video.activeUnplayableReason != null)
+              UnplayableReasonTile(reason: video.activeUnplayableReason!),
             QueueActionTile(
               video: video,
               onTap: () => Navigator.pop(sheetContext),

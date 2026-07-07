@@ -206,6 +206,7 @@ Video makeVideo({
   String title = 'A Video',
   int durationSeconds = 600,
   VideoStatus status = VideoStatus.complete,
+  UnplayableReason? unplayableReason,
 }) {
   return Video(
     id: id,
@@ -214,6 +215,7 @@ Video makeVideo({
     title: title,
     durationSeconds: durationSeconds,
     status: status,
+    unplayableReason: unplayableReason,
   );
 }
 

@@ -17,6 +17,7 @@ import '../config/constants.dart';
 import '../config/theme.dart';
 import '../widgets/progress_bar.dart';
 import '../widgets/queue_action.dart';
+import '../widgets/unplayable_badge.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   final String videoId;
@@ -64,6 +65,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   Video? _video;
 
   String? _error;
+
+  /// Why this video can't play (age-restricted, members-only, …), when the
+  /// server has it labeled. Renders an explanatory screen with a "Try anyway"
+  /// escape hatch instead of spinning through doomed stream attempts.
+  UnplayableReason? _blockedReason;
+
+  /// Set by "Try anyway": skip the [_blockedReason] gate for this screen so a
+  /// stale label can heal (the backend clears it on a successful resolve).
+  bool _ignoreUnplayableGate = false;
+
   late final ApiService _api;
   late final OfflineService _offline;
   StreamSubscription<WebSocketEvent>? _wsSubscription;
@@ -96,6 +107,72 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     ]);
   }
 
+  /// "Try anyway" on the blocked screen: retry with the gate off. If YouTube
+  /// now serves the video (cookies fixed, premiere aired) the server clears
+  /// the label and playback just starts; otherwise the normal error/timeout
+  /// paths report the failure.
+  void _tryAnyway() {
+    setState(() {
+      _ignoreUnplayableGate = true;
+      _blockedReason = null;
+    });
+    _initPlayer();
+  }
+
+  /// Full-screen explanation for a video YouTube refuses (age-restricted,
+  /// members-only, …), replacing the generic failure the doomed stream
+  /// attempts would eventually produce.
+  Widget _buildBlockedView(UnplayableReason reason) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              unplayableReasonIcon(reason),
+              color: unplayableReasonColor(reason),
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              reason.label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Text(
+                reason.description,
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton(
+                  onPressed: _tryAnyway,
+                  child: const Text('Try anyway'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _navigateBack,
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _initPlayer() async {
     try {
       // Path 0: Offline — play the local file without requiring network.
@@ -109,6 +186,20 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       }
 
       final video = await _api.getVideo(widget.videoId);
+
+      // A video the server knows YouTube refuses (age-restricted,
+      // members-only, …) can't stream; explain instead of spinning through
+      // doomed attempts. Local files (paths 0-2 below) are unaffected —
+      // activeUnplayableReason is null whenever a playable file exists.
+      if (!_ignoreUnplayableGate && video.activeUnplayableReason != null) {
+        if (mounted) {
+          setState(() {
+            _video = video;
+            _blockedReason = video.activeUnplayableReason;
+          });
+        }
+        return;
+      }
 
       // Path 1: HQ complete — play directly
       if (video.status == VideoStatus.complete) {
@@ -145,6 +236,28 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         }
       } on ApiException {
         // Couldn't mint a ticket / reach the server — fall back to a preview.
+      }
+
+      // The failed instant attempt may have just taught the server why this
+      // video can't stream (it classifies and stores the reason on a failed
+      // resolve) — re-check, so the viewer gets the explanation instead of a
+      // preview spinner doomed to time out the same way.
+      if (!_ignoreUnplayableGate && !_isInitialized) {
+        try {
+          final refreshed = await _api.getVideo(widget.videoId);
+          final reason = refreshed.activeUnplayableReason;
+          if (reason != null) {
+            if (mounted) {
+              setState(() {
+                _video = refreshed;
+                _blockedReason = reason;
+              });
+            }
+            return;
+          }
+        } on ApiException {
+          // Server unreachable — continue to the preview fallback.
+        }
       }
 
       // Fallback: request a preview, show spinner, and listen for it.
@@ -770,7 +883,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
             fit: StackFit.expand,
             children: [
               // Video
-              if (_error != null)
+              if (_blockedReason != null)
+                _buildBlockedView(_blockedReason!)
+              else if (_error != null)
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.all(32),
@@ -830,7 +945,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
               // Back button while waiting for the player to come up — the
               // controls overlay only exists once playback started.
-              if (_error == null && !_isInitialized)
+              if (_error == null && _blockedReason == null && !_isInitialized)
                 SafeArea(
                   child: Align(
                     alignment: Alignment.topLeft,
