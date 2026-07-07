@@ -204,6 +204,58 @@ void main() {
       expect(video.uploadedAt, isNull);
       expect(video.status, VideoStatus.cataloged);
     });
+
+    test('maps unplayable_reason and round-trips it', () {
+      final video = Video.fromJson(const {
+        'id': 'v1',
+        'youtube_video_id': 'yt1',
+        'channel_id': 'c1',
+        'title': 'A Video',
+        'unplayable_reason': 'members_only',
+      });
+
+      expect(video.unplayableReason, UnplayableReason.membersOnly);
+      expect(video.activeUnplayableReason, UnplayableReason.membersOnly);
+      expect(Video.fromJson(video.toJson()), video);
+    });
+
+    test(
+      'absent unplayable_reason stays null; unknown values map to unknown',
+      () {
+        final absent = Video.fromJson(const {
+          'id': 'v1',
+          'youtube_video_id': 'yt1',
+          'channel_id': 'c1',
+          'title': 'A Video',
+        });
+        expect(absent.unplayableReason, isNull);
+
+        // Forward-compat: vocabulary this client doesn't know yet still banners.
+        final novel = Video.fromJson(const {
+          'id': 'v1',
+          'youtube_video_id': 'yt1',
+          'channel_id': 'c1',
+          'title': 'A Video',
+          'unplayable_reason': 'some_future_reason',
+        });
+        expect(novel.unplayableReason, UnplayableReason.unknown);
+        expect(novel.unplayableReason!.label, 'Unavailable');
+      },
+    );
+
+    test('a playable file suppresses the active reason', () {
+      final video = Video.fromJson(const {
+        'id': 'v1',
+        'youtube_video_id': 'yt1',
+        'channel_id': 'c1',
+        'title': 'A Video',
+        'status': 'COMPLETE',
+        'unplayable_reason': 'age_restricted',
+      });
+
+      expect(video.unplayableReason, UnplayableReason.ageRestricted);
+      expect(video.activeUnplayableReason, isNull);
+    });
   });
 
   group('Video resume', () {

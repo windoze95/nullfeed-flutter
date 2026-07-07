@@ -9,6 +9,7 @@ import '../config/theme.dart';
 import '../providers/offline_provider.dart';
 import '../services/offline_service.dart';
 import 'progress_bar.dart';
+import 'unplayable_badge.dart';
 
 class VideoListTile extends ConsumerStatefulWidget {
   final Video video;
@@ -54,6 +55,8 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
     if (v.isWatched) parts.add('watched');
     final state = _downloadStateLabel(offlineStatus);
     if (state != null) parts.add(state);
+    final reason = v.activeUnplayableReason;
+    if (reason != null) parts.add(reason.label);
     return parts.join(', ');
   }
 
@@ -199,6 +202,18 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                                     child: const Icon(
                                       Icons.play_circle_outline,
                                       color: NullFeedTheme.textMuted,
+                                    ),
+                                  ),
+                                // Why this video can't play — hidden once a
+                                // local file makes it playable anyway.
+                                if (widget.video.activeUnplayableReason != null)
+                                  Positioned(
+                                    left: 4,
+                                    top: 4,
+                                    child: UnplayableBadge(
+                                      reason:
+                                          widget.video.activeUnplayableReason!,
+                                      compact: true,
                                     ),
                                   ),
                                 // Duration
