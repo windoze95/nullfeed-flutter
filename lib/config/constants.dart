@@ -111,6 +111,12 @@ class AppConstants {
   /// Max videos one /prewarm call asks the backend to pre-generate previews for.
   static const int prewarmBatchSize = 12;
 
+  /// While playing a preview and waiting for the HQ download, how often to
+  /// poll the video's status as a WebSocket fallback — the download_complete
+  /// event fires exactly once, so a dropped connection would otherwise leave
+  /// the player on the preview for the whole session.
+  static const int hqPollIntervalSeconds = 20;
+
   // UI
   static const double cardAspectRatio = 16 / 9;
   static const double channelCardWidth = 280.0;

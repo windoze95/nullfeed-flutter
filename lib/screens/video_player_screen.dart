@@ -34,12 +34,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   Timer? _previewTimeout;
   Timer? _previewPollTimer;
   Timer? _previewMaxWait;
+  Timer? _hqPollTimer;
   bool _showControls = true;
   bool _isInitialized = false;
   bool _isPreviewMode = false;
   bool _isOfflinePlayback = false;
   bool _startingPlayback = false;
   bool _pendingHqSwitch = false;
+  bool _switchingToHq = false;
   bool _progressSavedOnExit = false;
 
   /// When playback resumed from a saved position, the position (in seconds) the
@@ -208,8 +210,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         return;
       }
 
-      // Path 2: Preview already ready — play preview, listen for HQ
+      // Path 2: Preview already ready — play preview, listen for HQ. A warmed
+      // preview (prewarm) means nothing has enqueued the HQ download yet, so
+      // request it — without this the HQ listener waits forever. Idempotent
+      // and best-effort, like the instant-stream path below.
       if (video.hasPreviewReady) {
+        unawaited(_api.cacheVideo(widget.videoId).catchError((_) {}));
         final previewUrl = await _api.getPreviewStreamUrl(widget.videoId);
         await _startPlayback(previewUrl, video, isPreview: true);
         _listenForHqReady();
@@ -452,6 +458,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
           event.data['video_id'] == widget.videoId) {
         _stopWaiting();
         try {
+          // The preview request alone never enqueues the HQ download — ask for
+          // it here so the swap the HQ listener waits for can actually happen.
+          unawaited(_api.cacheVideo(widget.videoId).catchError((_) {}));
           final previewUrl = await _api.getPreviewStreamUrl(widget.videoId);
           if (!mounted) return;
           // Fire-and-forget so the HQ listener is registered before the preview
@@ -494,6 +503,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
           await _startPlayback(streamUrl, latest);
         } else if (latest.hasPreviewReady) {
           _stopWaiting();
+          // Same as the WS preview-ready path: enqueue the HQ download the
+          // upcoming listener waits for.
+          unawaited(_api.cacheVideo(widget.videoId).catchError((_) {}));
           final previewUrl = await _api.getPreviewStreamUrl(widget.videoId);
           await _startPlayback(previewUrl, latest, isPreview: true);
           _listenForHqReady();
@@ -525,15 +537,45 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         _switchToHq();
       }
     });
+
+    // The download_complete event fires exactly once; a WS drop/reconnect at
+    // the wrong moment would leave the preview playing for the whole session.
+    // Poll slowly as a safety net (mirrors _startPreviewPolling).
+    _hqPollTimer?.cancel();
+    _hqPollTimer = Timer.periodic(
+      const Duration(seconds: AppConstants.hqPollIntervalSeconds),
+      (_) async {
+        // Done: the swap already happened (or the screen is gone). While the
+        // preview is still initializing (_isInitialized false) just keep
+        // waiting — _pendingHqSwitch covers an early completion.
+        if (!mounted || (_isInitialized && !_isPreviewMode)) {
+          _hqPollTimer?.cancel();
+          _hqPollTimer = null;
+          return;
+        }
+        try {
+          final latest = await _api.getVideo(widget.videoId);
+          if (!mounted || (_isInitialized && !_isPreviewMode)) return;
+          if (latest.status == VideoStatus.complete) {
+            _wsSubscription?.cancel();
+            await _switchToHq();
+          }
+        } catch (_) {
+          // Server unreachable — try again on the next tick.
+        }
+      },
+    );
   }
 
   Future<void> _switchToHq() async {
+    if (_switchingToHq || (_isInitialized && !_isPreviewMode)) return;
     if (_controller == null || !_controller!.value.isInitialized) {
       // Preview is still initializing — queue the upgrade instead of
       // dropping it (the WS subscription is already cancelled by now).
       _pendingHqSwitch = true;
       return;
     }
+    _switchingToHq = true;
 
     // Capture current position and the user's chosen speed so the upgrade is
     // seamless.
@@ -557,6 +599,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       }
 
       final oldController = _controller;
+      _hqPollTimer?.cancel();
+      _hqPollTimer = null;
       setState(() {
         _controller = hqController;
         _isPreviewMode = false;
@@ -571,8 +615,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         oldController?.dispose();
       });
     } catch (e) {
-      // HQ switch failed — keep playing preview (silent fallback)
+      // HQ switch failed — keep playing preview; the poll fallback retries
+      // on its next tick.
       debugPrint('HQ switch failed, continuing preview: $e');
+    } finally {
+      _switchingToHq = false;
     }
   }
 
@@ -825,6 +872,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _previewTimeout?.cancel();
     _previewPollTimer?.cancel();
     _previewMaxWait?.cancel();
+    _hqPollTimer?.cancel();
     // Save final position (fire-and-forget; a failed save must never throw
     // out of dispose). Skipped when _navigateBack already fired the save on
     // the way out, so teardown sends exactly one /progress PUT.
