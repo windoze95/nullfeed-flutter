@@ -33,6 +33,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// PiP button. Set once playback starts.
   bool _pipSupported = false;
 
+  /// True while the video is fullscreen (device in landscape, or forced via the
+  /// fullscreen button). Portrait is the normal windowed view.
+  bool _isFullscreen = false;
+
   Timer? _progressTimer;
   Timer? _hideControlsTimer;
   Timer? _previewTimeout;
@@ -94,23 +98,58 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     super.initState();
     _api = ref.read(apiServiceProvider);
     _offline = ref.read(offlineServiceProvider);
-    _applyImmersiveMode();
-    // Auto-advance replaces this route with the next player in the same frame,
-    // which disposes the previous player — and its dispose() resets the system
-    // UI to edge-to-edge / all-orientations. Re-assert after the frame so the
-    // incoming player always wins that race.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _applyImmersiveMode();
-    });
-    _initPlayer();
-  }
-
-  void _applyImmersiveMode() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // Don't force fullscreen on start: open windowed and allow rotation, then
+    // let orientation drive it — landscape is fullscreen, portrait is the normal
+    // view (see _syncFullscreenToOrientation, called from didChangeDependencies,
+    // which upgrades to immersive if we're already in landscape).
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    _initPlayer();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncFullscreenToOrientation();
+  }
+
+  /// Fullscreen (immersive, status bar hidden) whenever the device is in
+  /// landscape; a normal windowed view in portrait. Runs on every orientation
+  /// change — so rotating the phone enters/exits fullscreen — and on the first
+  /// build, so opening a video while already holding the phone in landscape
+  /// starts fullscreen.
+  void _syncFullscreenToOrientation() {
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    if (isLandscape == _isFullscreen) return;
+    setState(() => _isFullscreen = isLandscape);
+    SystemChrome.setEnabledSystemUIMode(
+      isLandscape ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
+  }
+
+  /// The fullscreen button. Rotating the phone already toggles fullscreen; this
+  /// covers holding the phone upright: from portrait it forces landscape
+  /// (fullscreen), and from fullscreen it re-allows rotation (dropping back to
+  /// portrait when the phone is held upright).
+  void _toggleFullscreen() {
+    SystemChrome.setPreferredOrientations(
+      _isFullscreen
+          ? const [
+              DeviceOrientation.portraitUp,
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ]
+          : const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ],
+    );
+    _scheduleHideControls();
   }
 
   /// After playback starts, ask the player whether this device supports PiP
@@ -1068,6 +1107,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   isQueued: isQueued,
                   onToggleQueue: video == null ? null : _toggleQueue,
                   onPip: _pipSupported ? _enterPipFromButton : null,
+                  isFullscreen: _isFullscreen,
+                  onFullscreen: _toggleFullscreen,
                 ),
 
               // Resume affordance: playback auto-resumed from a saved position
@@ -1207,12 +1248,20 @@ class _ControlsOverlay extends StatelessWidget {
   /// Enters Picture-in-Picture. Null hides the PiP control (unsupported device).
   final VoidCallback? onPip;
 
+  /// Whether the video is currently fullscreen (picks the button's icon).
+  final bool isFullscreen;
+
+  /// Toggles fullscreen (forces landscape, or releases rotation).
+  final VoidCallback onFullscreen;
+
   const _ControlsOverlay({
     required this.player,
     required this.onBack,
     required this.onSeekRelative,
     required this.onPlayPause,
     required this.onInteraction,
+    required this.isFullscreen,
+    required this.onFullscreen,
     this.isQueued,
     this.onToggleQueue,
     this.onPip,
@@ -1274,6 +1323,14 @@ class _ControlsOverlay extends StatelessWidget {
                       onPressed: onPip,
                     ),
                   _SpeedButton(player: player, onInteraction: onInteraction),
+                  IconButton(
+                    icon: Icon(
+                      isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                      color: Colors.white,
+                    ),
+                    tooltip: isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
+                    onPressed: onFullscreen,
+                  ),
                 ],
               ),
             ),
