@@ -884,7 +884,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   void _seekRelative(int seconds) {
     final player = _player;
     if (player == null) return;
-    final target = player.position + Duration(seconds: seconds);
+    var target = player.position + Duration(seconds: seconds);
+    // Never skip onto/past the end. The player reports a seek beyond the
+    // duration as "finished" (video_player flips isCompleted at the end just
+    // the same), which would auto-advance to the next queued video instead of
+    // just nudging the playhead — so a skip-forward near the end must stay a
+    // moment short of the end. Natural end-of-playback still advances.
+    final duration = player.duration;
+    if (duration > Duration.zero) {
+      final maxTarget = duration - const Duration(seconds: 1);
+      if (target > maxTarget) target = maxTarget;
+    }
+    if (target < Duration.zero) target = Duration.zero;
     player.seekTo(target);
     setState(() => _showControls = true);
     _scheduleHideControls();
