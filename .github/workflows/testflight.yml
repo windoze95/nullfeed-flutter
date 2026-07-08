@@ -21,26 +21,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Calculate build number
+      - name: Read app version
         run: |
-          # Read version from pubspec.yaml (e.g., "1.0.0+3" → "1.0.0")
+          # Read version from pubspec.yaml (e.g., "0.1.0+1" -> "0.1.0"). The
+          # build number is queried from TestFlight below (that needs fastlane).
           VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d '+' -f1)
           echo "App version: $VERSION"
-
-          # Find the commit where this version was first set
-          FIRST_COMMIT=$(git log --all --reverse --format='%H' -S "version: $VERSION" -- pubspec.yaml | head -1)
-          if [ -z "$FIRST_COMMIT" ]; then
-            # Version has been there since the beginning
-            BUILD_NUMBER=$(git rev-list --count HEAD)
-          else
-            # Count commits from that point to HEAD (inclusive)
-            BUILD_NUMBER=$(git rev-list --count "$FIRST_COMMIT"..HEAD)
-            BUILD_NUMBER=$((BUILD_NUMBER + 1))
-          fi
-
-          echo "Build number: $BUILD_NUMBER"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
       # App Store Connect requires the iOS 26 SDK (Xcode 26) for uploads
       # as of June 2026.
@@ -64,6 +51,17 @@ jobs:
 
       - name: Install fastlane
         run: sudo gem install fastlane
+
+      - name: Compute next build number from TestFlight
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_B64: ${{ secrets.APP_STORE_CONNECT_API_KEY_B64 }}
+        run: |
+          # Queries App Store Connect for the latest TestFlight build of this
+          # version and sets BUILD_NUMBER (= latest + 1) in GITHUB_ENV.
+          cd ios
+          fastlane next_build_number
 
       - name: Import signing certificate
         uses: apple-actions/import-codesign-certs@v2
