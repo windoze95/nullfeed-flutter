@@ -26,18 +26,12 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
-    with WidgetsBindingObserver {
+class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   NfPlaybackController? _player;
 
   /// Whether this device can show Picture-in-Picture (iPhone iOS 14+); gates the
-  /// PiP button and auto-PiP. Set once playback starts.
+  /// PiP button. Set once playback starts.
   bool _pipSupported = false;
-
-  /// True while a PiP session we auto-started on backgrounding is active, so a
-  /// quick return to the app (e.g. a Control Center pull that didn't background
-  /// it) can dismiss it again.
-  bool _autoPipActive = false;
 
   Timer? _progressTimer;
   Timer? _hideControlsTimer;
@@ -98,7 +92,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _api = ref.read(apiServiceProvider);
     _offline = ref.read(offlineServiceProvider);
     _applyImmersiveMode();
@@ -118,30 +111,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-  }
-
-  /// iOS Picture-in-Picture: pop the video into a floating window when the app
-  /// is backgrounded mid-playback so it keeps playing over other apps.
-  ///
-  /// Best-effort — iOS only reliably allows *starting* PiP from the foreground,
-  /// so the PiP button is the guaranteed trigger. No-op on web / unsupported
-  /// devices. Audio keeps playing regardless via the background-audio setup.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_pipSupported) return;
-    final player = _player;
-    if (player == null || !_isInitialized) return;
-    if (state == AppLifecycleState.inactive &&
-        player.isPlaying &&
-        !_autoPipActive) {
-      _autoPipActive = true;
-      unawaited(player.enterPip());
-    } else if (state == AppLifecycleState.resumed && _autoPipActive) {
-      // Back in the app: undo a PiP we auto-started that didn't lead to
-      // backgrounding (e.g. a Control Center pull).
-      _autoPipActive = false;
-      unawaited(player.exitPip());
-    }
   }
 
   /// After playback starts, ask the player whether this device supports PiP
@@ -921,7 +890,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _wsSubscription?.cancel();
     _adWsSubscription?.cancel();
     _progressTimer?.cancel();
@@ -974,6 +942,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       child: Scaffold(
         backgroundColor: Colors.black,
         body: GestureDetector(
+          // opaque so taps anywhere over the video (which passes pointers
+          // through) reach onTap, not just where a child is hit.
+          behavior: HitTestBehavior.opaque,
           onTap: _toggleControls,
           onDoubleTapDown: (details) {
             final screenWidth = MediaQuery.of(context).size.width;

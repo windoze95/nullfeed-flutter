@@ -185,7 +185,13 @@ class BetterPlayerNfController extends NfPlaybackController {
   }
 
   @override
-  Widget buildView() => BetterPlayer(controller: _controller, key: _viewKey);
+  Widget buildView() =>
+      // IgnorePointer so taps fall through to the screen's own GestureDetector
+      // (BetterPlayer otherwise swallows them); our controls are a separate
+      // overlay, and PiP uses native layers, so the video needs no gestures.
+      IgnorePointer(
+        child: BetterPlayer(controller: _controller, key: _viewKey),
+      );
 
   @override
   void dispose() {
