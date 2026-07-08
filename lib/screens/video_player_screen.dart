@@ -809,7 +809,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     // fight the swap's own seek — the "finished caching" freeze.
     if (_switchingToHq) return;
     final pos = player.position.inMilliseconds / 1000.0;
-    final decision = sponsorSkipDecision(pos, _adSegments, _skipSeekInFlightEnd);
+    final decision = sponsorSkipDecision(
+      pos,
+      _adSegments,
+      _skipSeekInFlightEnd,
+    );
     _skipSeekInFlightEnd = decision.inFlightEnd;
     final target = decision.seekToMs;
     if (target != null) {

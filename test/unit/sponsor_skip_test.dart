@@ -19,18 +19,21 @@ void main() {
       expect(d.inFlightEnd, 30.0);
     });
 
-    test('a stuck playhead yields exactly one seek over many ticks (no storm)', () {
-      // This is the regression guard: a start sponsor whose seek can't land yet
-      // (unbuffered instant/preview source) must not fire seekTo every tick.
-      double? inFlight;
-      var seeks = 0;
-      for (var tick = 0; tick < 100; tick++) {
-        final d = sponsorSkipDecision(0.1, const [startSponsor], inFlight);
-        inFlight = d.inFlightEnd;
-        if (d.seekToMs != null) seeks++;
-      }
-      expect(seeks, 1);
-    });
+    test(
+      'a stuck playhead yields exactly one seek over many ticks (no storm)',
+      () {
+        // This is the regression guard: a start sponsor whose seek can't land yet
+        // (unbuffered instant/preview source) must not fire seekTo every tick.
+        double? inFlight;
+        var seeks = 0;
+        for (var tick = 0; tick < 100; tick++) {
+          final d = sponsorSkipDecision(0.1, const [startSponsor], inFlight);
+          inFlight = d.inFlightEnd;
+          if (d.seekToMs != null) seeks++;
+        }
+        expect(seeks, 1);
+      },
+    );
 
     test('clears the guard once the playhead lands past the segment', () {
       final d = sponsorSkipDecision(30.0, const [startSponsor], 30.0);
