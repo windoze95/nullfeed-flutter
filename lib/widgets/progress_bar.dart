@@ -8,6 +8,12 @@ class NullFeedProgressBar extends StatelessWidget {
   final Color? backgroundColor;
   final void Function(double)? onSeek;
 
+  /// Called when the viewer begins / ends dragging the seek bar. Lets the
+  /// player suspend sponsor auto-skip during a manual scrub so a drag through a
+  /// sponsor segment isn't fought by an auto-seek. Only used when [onSeek] is set.
+  final VoidCallback? onSeekStart;
+  final VoidCallback? onSeekEnd;
+
   /// Accessibility label for the seek slider. Only used when [onSeek] is set.
   final String? semanticLabel;
 
@@ -23,6 +29,8 @@ class NullFeedProgressBar extends StatelessWidget {
     this.foregroundColor,
     this.backgroundColor,
     this.onSeek,
+    this.onSeekStart,
+    this.onSeekEnd,
     this.semanticLabel,
     this.semanticValueBuilder,
   });
@@ -71,6 +79,7 @@ class NullFeedProgressBar extends StatelessWidget {
               seek(fraction);
             }
           },
+          onHorizontalDragStart: (_) => onSeekStart?.call(),
           onHorizontalDragUpdate: (details) {
             final box = context.findRenderObject() as RenderBox?;
             if (box != null) {
@@ -79,6 +88,8 @@ class NullFeedProgressBar extends StatelessWidget {
               seek(fraction);
             }
           },
+          onHorizontalDragEnd: (_) => onSeekEnd?.call(),
+          onHorizontalDragCancel: () => onSeekEnd?.call(),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: bar,

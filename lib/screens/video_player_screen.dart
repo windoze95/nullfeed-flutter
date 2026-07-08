@@ -72,6 +72,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// playhead lands past the segment. See [sponsorSkipDecision].
   double? _skipSeekInFlightEnd;
 
+  /// True while the viewer is actively dragging the seek bar. Suspends sponsor
+  /// auto-skip so a manual scrub through a sponsor segment isn't fought by an
+  /// auto-seek — competing seeks on a still-buffering source wedge the player.
+  bool _isScrubbing = false;
+
   /// Set once auto-advance has fired so a stream of post-completion ticks can't
   /// trigger it again.
   bool _advancing = false;
@@ -803,11 +808,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   void _maybeSkipAd() {
     final player = _player;
     if (player == null || _adSegments.isEmpty) return;
-    // Stand down during the HQ swap: setResolution reinitializes the source in
-    // place (its position momentarily reads 0) and re-seeks to the restored
-    // spot, so a skip-seek here would fire on a fresh, unbuffered source and
-    // fight the swap's own seek — the "finished caching" freeze.
-    if (_switchingToHq) return;
+    // Stand down while the viewer is scrubbing (a manual drag through a sponsor
+    // mustn't be fought by an auto-seek — competing seeks wedge the player), and
+    // during the HQ swap: setResolution reinitializes the source in place (its
+    // position momentarily reads 0) and re-seeks to the restored spot, so a
+    // skip-seek there fights the swap's own seek — the "finished caching" freeze.
+    if (_isScrubbing || _switchingToHq) return;
     final pos = player.position.inMilliseconds / 1000.0;
     final decision = sponsorSkipDecision(
       pos,
@@ -862,6 +868,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _skipToastTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _showSkipToast = false);
     });
+  }
+
+  /// The viewer grabbed the seek bar — suspend sponsor auto-skip until they
+  /// let go so a manual scrub through a sponsor isn't fought by an auto-seek.
+  void _onScrubStart() => _isScrubbing = true;
+
+  /// The viewer released the seek bar. Resume auto-skip and drop any in-flight
+  /// skip guard: a manual reposition voids the prior seek, so a sponsor the
+  /// viewer landed inside is skipped once, fresh, from the released position.
+  void _onScrubEnd() {
+    _isScrubbing = false;
+    _skipSeekInFlightEnd = null;
   }
 
   /// When the video plays through to the end, advance into the queue: consume
@@ -1145,6 +1163,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   player: _player!,
                   onBack: _navigateBack,
                   onSeekRelative: _seekRelative,
+                  onSeekStart: _onScrubStart,
+                  onSeekEnd: _onScrubEnd,
                   onPlayPause: _togglePlayPause,
                   onInteraction: _scheduleHideControls,
                   isQueued: isQueued,
@@ -1319,6 +1339,11 @@ class _ControlsOverlay extends StatelessWidget {
   final NfPlaybackController player;
   final VoidCallback onBack;
   final void Function(int) onSeekRelative;
+
+  /// Called when the viewer begins / ends dragging the seek bar, so the screen
+  /// can suspend sponsor auto-skip during a manual scrub.
+  final VoidCallback onSeekStart;
+  final VoidCallback onSeekEnd;
   final VoidCallback onPlayPause;
   final VoidCallback onInteraction;
 
@@ -1340,6 +1365,8 @@ class _ControlsOverlay extends StatelessWidget {
     required this.player,
     required this.onBack,
     required this.onSeekRelative,
+    required this.onSeekStart,
+    required this.onSeekEnd,
     required this.onPlayPause,
     required this.onInteraction,
     required this.isFullscreen,
@@ -1505,6 +1532,8 @@ class _ControlsOverlay extends StatelessWidget {
                           player.seekTo(target);
                           onInteraction();
                         },
+                        onSeekStart: onSeekStart,
+                        onSeekEnd: onSeekEnd,
                       ),
                       const SizedBox(height: 4),
                       Row(
