@@ -65,6 +65,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   bool _showSkipToast = false;
   Timer? _skipToastTimer;
 
+  /// End (seconds) of the sponsor segment whose skip-seek has been issued but
+  /// hasn't landed yet. Guards [_maybeSkipAd] against re-issuing `seekTo` on
+  /// every playback tick while a from-cold seek is still buffering — that seek
+  /// storm livelocks the player (stutter → freeze → crash). Cleared once the
+  /// playhead lands past the segment. See [sponsorSkipDecision].
+  double? _skipSeekInFlightEnd;
+
   /// Set once auto-advance has fired so a stream of post-completion ticks can't
   /// trigger it again.
   bool _advancing = false;
@@ -676,6 +683,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
       if (!mounted) return;
 
+      // Any skip-seek issued against the preview source is void now that the HQ
+      // source is in place — clear the guard so a sponsor the playhead is still
+      // sitting in gets skipped once on the new source.
+      _skipSeekInFlightEnd = null;
       _hqPollTimer?.cancel();
       _hqPollTimer = null;
       setState(() => _isPreviewMode = false);
@@ -784,18 +795,30 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   /// Seek past any sponsor segment the playhead has entered, flashing a brief
-  /// "Skipped sponsor" toast. The 0.5s tail margin stops a seek to a segment's
-  /// end from immediately re-triggering the same segment.
+  /// "Skipped sponsor" toast. Issues the skip-seek at most once per segment (via
+  /// [sponsorSkipDecision]) rather than every tick: on a slow-to-buffer preview
+  /// / instant stream, re-seeking each tick while the first seek is still
+  /// buffering restarts it endlessly and livelocks the player (slow-motion →
+  /// freeze → crash) — which a sponsor at the very start of a video triggers.
   void _maybeSkipAd() {
     final player = _player;
     if (player == null || _adSegments.isEmpty) return;
+    // Stand down during the HQ swap: setResolution reinitializes the source in
+    // place (its position momentarily reads 0) and re-seeks to the restored
+    // spot, so a skip-seek here would fire on a fresh, unbuffered source and
+    // fight the swap's own seek — the "finished caching" freeze.
+    if (_switchingToHq) return;
     final pos = player.position.inMilliseconds / 1000.0;
-    for (final seg in _adSegments) {
-      if (pos >= seg.start && pos < seg.end - 0.5) {
-        player.seekTo(Duration(milliseconds: (seg.end * 1000).round()));
-        _flashSkipToast();
-        break;
-      }
+    final decision = sponsorSkipDecision(
+      pos,
+      _adSegments,
+      _skipSeekInFlightEnd,
+    );
+    _skipSeekInFlightEnd = decision.inFlightEnd;
+    final target = decision.seekToMs;
+    if (target != null) {
+      player.seekTo(Duration(milliseconds: target));
+      _flashSkipToast();
     }
   }
 
@@ -1184,6 +1207,45 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       ),
     );
   }
+}
+
+/// Pure decision for the sponsor-skip guard, extracted so its anti-seek-storm
+/// behavior is unit-testable without a live player.
+///
+/// Given the playhead [posSeconds], the detected [segments], and the end
+/// (seconds) of a segment whose skip-seek is already in flight ([inFlightEnd]),
+/// returns the seek target in milliseconds to issue (null when nothing should be
+/// sought) and the in-flight end to remember for the next tick.
+///
+/// The in-flight end is the crux: while a skip-seek is still buffering, the
+/// playhead keeps reporting a position inside the segment, so without this the
+/// caller would re-issue `seekTo` on every tick. Each re-seek cancels and
+/// restarts the native seek, so on a slow-to-buffer source it never lands and
+/// the player livelocks. Issue the seek once, then wait for the playhead to
+/// actually land past the segment before considering another skip.
+@visibleForTesting
+({int? seekToMs, double? inFlightEnd}) sponsorSkipDecision(
+  double posSeconds,
+  List<({double start, double end})> segments,
+  double? inFlightEnd,
+) {
+  // The playhead landed past the segment we were skipping — drop the guard so a
+  // later segment is free to skip.
+  if (inFlightEnd != null && posSeconds >= inFlightEnd - 0.5) {
+    inFlightEnd = null;
+  }
+  for (final seg in segments) {
+    // The 0.5s tail keeps a seek that lands a hair short of the end from
+    // immediately re-triggering the same segment.
+    if (posSeconds >= seg.start && posSeconds < seg.end - 0.5) {
+      // This segment's skip is already in flight — hold, don't storm the seek.
+      if (inFlightEnd == seg.end) {
+        return (seekToMs: null, inFlightEnd: inFlightEnd);
+      }
+      return (seekToMs: (seg.end * 1000).round(), inFlightEnd: seg.end);
+    }
+  }
+  return (seekToMs: null, inFlightEnd: inFlightEnd);
 }
 
 /// Formats a playback timestamp as M:SS, or H:MM:SS once it crosses an hour.
