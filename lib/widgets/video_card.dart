@@ -9,6 +9,7 @@ import '../config/theme.dart';
 import '../config/constants.dart';
 import '../providers/feed_provider.dart';
 import '../providers/offline_provider.dart';
+import 'content_type_badge.dart';
 import 'progress_bar.dart';
 import 'queue_action.dart';
 import 'unplayable_badge.dart';
@@ -150,7 +151,9 @@ class _VideoCardState extends ConsumerState<VideoCard> {
 
                               // Why this video can't play (age-restricted,
                               // members-only, …) — hidden once a local file
-                              // makes it playable anyway.
+                              // makes it playable anyway. Otherwise the
+                              // content-type pill (Short/Live/…) takes the same
+                              // corner; the two never show together.
                               if (widget.video.activeUnplayableReason != null)
                                 Positioned(
                                   left: 6,
@@ -158,6 +161,14 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                                   child: UnplayableBadge(
                                     reason:
                                         widget.video.activeUnplayableReason!,
+                                  ),
+                                )
+                              else if (widget.video.badgeContentType != null)
+                                Positioned(
+                                  left: 6,
+                                  top: 6,
+                                  child: ContentTypeBadge(
+                                    type: widget.video.badgeContentType!,
                                   ),
                                 ),
 

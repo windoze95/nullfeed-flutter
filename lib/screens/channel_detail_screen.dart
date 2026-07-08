@@ -7,6 +7,8 @@ import '../providers/channel_provider.dart';
 import '../providers/feed_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../models/channel.dart';
+import '../widgets/content_type_badge.dart';
 import '../widgets/queue_action.dart';
 import '../widgets/unplayable_badge.dart';
 import '../widgets/video_list_tile.dart';
@@ -146,6 +148,21 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                 expandedHeight: 220,
                 pinned: true,
                 backgroundColor: NullFeedTheme.surfaceColor,
+                actions: [
+                  // Per-channel content-type filter — only when subscribed and
+                  // the channel has more than one kind of media to sift.
+                  if (channel.isSubscribed &&
+                      channel.availableContentTypes.length > 1)
+                    IconButton(
+                      icon: Icon(
+                        channel.hiddenContentTypes.isEmpty
+                            ? Icons.filter_alt_outlined
+                            : Icons.filter_alt,
+                      ),
+                      tooltip: 'Filter content types',
+                      onPressed: () => _showContentFilter(channel),
+                    ),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,
@@ -401,6 +418,89 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
         ),
       ),
     );
+  }
+
+  /// The per-channel content-type filter menu: a checklist of the types this
+  /// channel has. Unchecking a type hides it from this channel's list and feeds
+  /// (persisted server-side); checking it brings it back. Toggles apply live.
+  void _showContentFilter(Channel channel) {
+    final available = channel.availableContentTypes
+        .map(contentTypeFromWire)
+        .whereType<ContentType>()
+        .where((t) => t != ContentType.unknown)
+        .toList();
+    if (available.isEmpty) return;
+
+    // Local source of truth for the sheet, seeded from the current filter and
+    // updated optimistically so toggles feel instant; each change is persisted.
+    final hidden = {...channel.hiddenContentTypes};
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NullFeedTheme.cardColor,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Show content types',
+                    style: TextStyle(
+                      color: NullFeedTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              for (final type in available)
+                CheckboxListTile(
+                  value: !hidden.contains(type.wire),
+                  secondary: Icon(
+                    contentTypeIcon(type),
+                    color: contentTypeColor(type),
+                  ),
+                  title: Text(type.menuLabel),
+                  activeColor: NullFeedTheme.primaryColor,
+                  onChanged: (show) {
+                    setSheetState(() {
+                      if (show == false) {
+                        hidden.add(type.wire);
+                      } else {
+                        hidden.remove(type.wire);
+                      }
+                    });
+                    _applyContentFilter(hidden.toList());
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyContentFilter(List<String> hidden) async {
+    try {
+      await ref
+          .read(apiServiceProvider)
+          .setContentFilter(widget.channelId, hidden);
+      if (!mounted) return;
+      // Re-fetch the channel (updated filter + icon state) and the now-gated
+      // video list.
+      ref.invalidate(channelDetailProvider(widget.channelId));
+      ref.invalidate(channelVideosProvider(widget.channelId));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn\'t update the filter')),
+        );
+      }
+    }
   }
 
   void _showVideoMenu(Video video) {

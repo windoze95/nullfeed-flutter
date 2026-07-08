@@ -8,6 +8,7 @@ import '../models/video.dart';
 import '../config/theme.dart';
 import '../providers/offline_provider.dart';
 import '../services/offline_service.dart';
+import 'content_type_badge.dart';
 import 'progress_bar.dart';
 import 'unplayable_badge.dart';
 
@@ -205,7 +206,9 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                                     ),
                                   ),
                                 // Why this video can't play — hidden once a
-                                // local file makes it playable anyway.
+                                // local file makes it playable anyway. Otherwise
+                                // the content-type pill (Short/Live/…) shares the
+                                // same corner; they never show together.
                                 if (widget.video.activeUnplayableReason != null)
                                   Positioned(
                                     left: 4,
@@ -213,6 +216,15 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                                     child: UnplayableBadge(
                                       reason:
                                           widget.video.activeUnplayableReason!,
+                                      compact: true,
+                                    ),
+                                  )
+                                else if (widget.video.badgeContentType != null)
+                                  Positioned(
+                                    left: 4,
+                                    top: 4,
+                                    child: ContentTypeBadge(
+                                      type: widget.video.badgeContentType!,
                                       compact: true,
                                     ),
                                   ),

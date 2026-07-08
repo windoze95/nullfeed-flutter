@@ -81,6 +81,80 @@ extension UnplayableReasonLabels on UnplayableReason {
   };
 }
 
+/// What kind of media a video is, classified by the backend at catalog time. A
+/// stable label (unlike [UnplayableReason], which clears once playable), used to
+/// badge the thumbnail and drive the per-channel filter. Null/[regular] is a
+/// plain upload; [unknown] absorbs vocabulary the backend adds before this
+/// client learns it.
+enum ContentType {
+  @JsonValue('regular')
+  regular,
+  @JsonValue('short')
+  short,
+  @JsonValue('live')
+  live,
+  @JsonValue('premiere')
+  premiere,
+  @JsonValue('age_restricted')
+  ageRestricted,
+  @JsonValue('members_only')
+  membersOnly,
+  @JsonValue('premium')
+  premium,
+  unknown,
+}
+
+extension ContentTypeLabels on ContentType {
+  /// Short thumbnail-badge text (singular).
+  String get label => switch (this) {
+    ContentType.short => 'Short',
+    ContentType.live => 'Live',
+    ContentType.premiere => 'Premiere',
+    ContentType.ageRestricted => 'Age-restricted',
+    ContentType.membersOnly => 'Members only',
+    ContentType.premium => 'Premium',
+    ContentType.regular || ContentType.unknown => '',
+  };
+
+  /// Filter-menu label (plural where natural).
+  String get menuLabel => switch (this) {
+    ContentType.regular => 'Videos',
+    ContentType.short => 'Shorts',
+    ContentType.live => 'Live',
+    ContentType.premiere => 'Premieres',
+    ContentType.ageRestricted => 'Age-restricted',
+    ContentType.membersOnly => 'Members only',
+    ContentType.premium => 'Premium',
+    ContentType.unknown => 'Other',
+  };
+
+  /// The backend wire value (matches the @JsonValue), for the filter API and
+  /// comparing against a channel's hidden/available lists.
+  String get wire => switch (this) {
+    ContentType.regular => 'regular',
+    ContentType.short => 'short',
+    ContentType.live => 'live',
+    ContentType.premiere => 'premiere',
+    ContentType.ageRestricted => 'age_restricted',
+    ContentType.membersOnly => 'members_only',
+    ContentType.premium => 'premium',
+    ContentType.unknown => 'unknown',
+  };
+}
+
+/// Parse a backend content-type wire value (e.g. from a channel's
+/// available/hidden lists) into a [ContentType], or null if unrecognized.
+ContentType? contentTypeFromWire(String value) => switch (value) {
+  'regular' => ContentType.regular,
+  'short' => ContentType.short,
+  'live' => ContentType.live,
+  'premiere' => ContentType.premiere,
+  'age_restricted' => ContentType.ageRestricted,
+  'members_only' => ContentType.membersOnly,
+  'premium' => ContentType.premium,
+  _ => null,
+};
+
 @freezed
 abstract class Video with _$Video {
   const factory Video({
@@ -110,6 +184,9 @@ abstract class Video with _$Video {
       unknownEnumValue: UnplayableReason.unknown,
     )
     UnplayableReason? unplayableReason,
+    // What kind of media this is (see ContentType); null = regular.
+    @JsonKey(name: 'content_type', unknownEnumValue: ContentType.unknown)
+    ContentType? contentType,
     // Joined from channel
     @JsonKey(name: 'channel_name') @Default('') String channelName,
   }) = _Video;
@@ -129,6 +206,18 @@ extension VideoExtensions on Video {
   /// file for (HQ or preview) plays regardless of a stale label, so no banner.
   UnplayableReason? get activeUnplayableReason =>
       isPlayable ? null : unplayableReason;
+
+  /// The content type worth badging on the thumbnail, or null. Regular/unknown
+  /// aren't badged, and the unplayable banner already covers members/premium/
+  /// age when it's showing — so the two badges never stack.
+  ContentType? get badgeContentType {
+    if (activeUnplayableReason != null) return null;
+    final ct = contentType;
+    if (ct == null || ct == ContentType.regular || ct == ContentType.unknown) {
+      return null;
+    }
+    return ct;
+  }
 
   bool get hasPreviewReady => previewStatus == 'READY';
 
