@@ -1,17 +1,16 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/video.dart';
 import '../providers/queue_provider.dart';
 import '../providers/websocket_provider.dart';
 import '../services/api_service.dart';
 import '../services/offline_service.dart';
+import '../services/playback/nf_playback_controller.dart';
 import '../services/websocket_service.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
@@ -27,8 +26,19 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
-  VideoPlayerController? _controller;
+class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
+    with WidgetsBindingObserver {
+  NfPlaybackController? _player;
+
+  /// Whether this device can show Picture-in-Picture (iPhone iOS 14+); gates the
+  /// PiP button and auto-PiP. Set once playback starts.
+  bool _pipSupported = false;
+
+  /// True while a PiP session we auto-started on backgrounding is active, so a
+  /// quick return to the app (e.g. a Control Center pull that didn't background
+  /// it) can dismiss it again.
+  bool _autoPipActive = false;
+
   Timer? _progressTimer;
   Timer? _hideControlsTimer;
   Timer? _previewTimeout;
@@ -88,6 +98,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _api = ref.read(apiServiceProvider);
     _offline = ref.read(offlineServiceProvider);
     _applyImmersiveMode();
@@ -107,6 +118,62 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+  }
+
+  /// iOS Picture-in-Picture: pop the video into a floating window when the app
+  /// is backgrounded mid-playback so it keeps playing over other apps.
+  ///
+  /// Best-effort — iOS only reliably allows *starting* PiP from the foreground,
+  /// so the PiP button is the guaranteed trigger. No-op on web / unsupported
+  /// devices. Audio keeps playing regardless via the background-audio setup.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_pipSupported) return;
+    final player = _player;
+    if (player == null || !_isInitialized) return;
+    if (state == AppLifecycleState.inactive &&
+        player.isPlaying &&
+        !_autoPipActive) {
+      _autoPipActive = true;
+      unawaited(player.enterPip());
+    } else if (state == AppLifecycleState.resumed && _autoPipActive) {
+      // Back in the app: undo a PiP we auto-started that didn't lead to
+      // backgrounding (e.g. a Control Center pull).
+      _autoPipActive = false;
+      unawaited(player.exitPip());
+    }
+  }
+
+  /// After playback starts, ask the player whether this device supports PiP
+  /// (iPhone needs iOS 14+) and surface the PiP control accordingly.
+  void _checkPipSupport() {
+    _player?.isPipSupported().then((supported) {
+      if (mounted && supported != _pipSupported) {
+        setState(() => _pipSupported = supported);
+      }
+    });
+  }
+
+  /// Builds the playback source for [url], attaching the video's title, channel
+  /// and thumbnail so iOS can populate the lock-screen / Control Center "Now
+  /// Playing" panel while audio plays in the background.
+  NfSource _sourceFor(String url, Video? video, {required bool isFile}) {
+    final title = video?.title;
+    final author = (video != null && video.channelName.isNotEmpty)
+        ? video.channelName
+        : null;
+    final youtubeId = video?.youtubeVideoId ?? '';
+    final imageUrl = youtubeId.isNotEmpty
+        ? 'https://img.youtube.com/vi/$youtubeId/mqdefault.jpg'
+        : null;
+    return isFile
+        ? NfSource.file(url, title: title, author: author, imageUrl: imageUrl)
+        : NfSource.network(
+            url,
+            title: title,
+            author: author,
+            imageUrl: imageUrl,
+          );
   }
 
   /// "Try anyway" on the blocked screen: retry with the gate off. If YouTube
@@ -285,11 +352,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   Future<void> _startOfflinePlayback(String localPath) async {
-    final controller = VideoPlayerController.file(File(localPath));
+    final player = createNfPlaybackController(
+      _sourceFor(localPath, _video, isFile: true),
+    );
     try {
-      await controller.initialize();
+      await player.initialize();
     } catch (e) {
-      controller.dispose();
+      player.dispose();
       if (mounted) {
         setState(() => _error = 'Failed to load video: $e');
       }
@@ -297,7 +366,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
 
     _isOfflinePlayback = true;
-    controller.addListener(_onControllerUpdate);
+    player.addListener(_onPlayerUpdate);
 
     // Prefer the server's resume position (3s budget) but never block
     // playback on the network — fall back to the locally cached position.
@@ -318,24 +387,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     // over). A rewind gives the viewer a moment of context.
     if (resumeSeconds > 0 && !fullyWatched) {
       final resumePos = (resumeSeconds - AppConstants.skipBackwardSeconds)
-          .clamp(0, controller.value.duration.inSeconds);
-      await controller.seekTo(Duration(seconds: resumePos));
+          .clamp(0, player.duration.inSeconds);
+      await player.seekTo(Duration(seconds: resumePos));
       _resumeFromSeconds = resumeSeconds;
     }
 
-    await controller.play();
+    await player.play();
 
     if (!mounted) {
-      controller.dispose();
+      player.dispose();
       return;
     }
 
     setState(() {
-      _controller = controller;
+      _player = player;
       _isInitialized = true;
     });
     // Playback has started — keep the screen awake until the player closes.
     unawaited(WakelockPlus.enable());
+    _checkPipSupport();
 
     _maybeShowResumeBanner();
     _startProgressTimer();
@@ -360,15 +430,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     if (_startingPlayback || _isInitialized) return false;
     _startingPlayback = true;
 
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final player = createNfPlaybackController(
+      _sourceFor(url, video, isFile: false),
+    );
 
     try {
       // Bound init so a stalled source (e.g. a wedged instant-stream proxy)
       // can't leave the player spinning forever — on timeout we treat it as a
       // load failure so the caller can fall back / surface an error.
-      await controller.initialize().timeout(initTimeout);
+      await player.initialize().timeout(initTimeout);
     } catch (e) {
-      controller.dispose();
+      player.dispose();
       _startingPlayback = false;
       if (mounted && reportErrors) {
         setState(() => _error = 'Failed to load video: $e');
@@ -376,25 +448,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       return false;
     }
 
-    controller.addListener(_onControllerUpdate);
+    player.addListener(_onPlayerUpdate);
 
     // Resume from where the viewer left off (rewound a little so they can
     // re-orient). A fresh or fully-watched video starts from the top.
     if (video.canResume) {
-      await controller.seekTo(Duration(seconds: video.resumeSeekSeconds));
+      await player.seekTo(Duration(seconds: video.resumeSeekSeconds));
       _resumeFromSeconds = video.watchPositionSeconds;
     }
 
-    await controller.play();
+    await player.play();
 
     if (!mounted) {
-      controller.dispose();
+      player.dispose();
       _startingPlayback = false;
       return false;
     }
 
     setState(() {
-      _controller = controller;
+      _player = player;
       _isInitialized = true;
       _isPreviewMode = isPreview;
       _video = video;
@@ -402,6 +474,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _startingPlayback = false;
     // Playback has started — keep the screen awake until the player closes.
     unawaited(WakelockPlus.enable());
+    _checkPipSupport();
 
     // An HQ-ready event may have arrived while the preview was initializing.
     if (isPreview && _pendingHqSwitch) {
@@ -569,7 +642,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   Future<void> _switchToHq() async {
     if (_switchingToHq || (_isInitialized && !_isPreviewMode)) return;
-    if (_controller == null || !_controller!.value.isInitialized) {
+    final player = _player;
+    if (player == null || !player.isInitialized) {
       // Preview is still initializing — queue the upgrade instead of
       // dropping it (the WS subscription is already cancelled by now).
       _pendingHqSwitch = true;
@@ -577,43 +651,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
     _switchingToHq = true;
 
-    // Capture current position and the user's chosen speed so the upgrade is
-    // seamless.
-    final currentPosition = _controller!.value.position;
-    final currentSpeed = _controller!.value.playbackSpeed;
-
     try {
       final streamUrl = await _api.getVideoStreamUrl(widget.videoId);
-      final hqController = VideoPlayerController.networkUrl(
-        Uri.parse(streamUrl),
-      );
-      await hqController.initialize();
-      hqController.addListener(_onControllerUpdate);
-      await hqController.seekTo(currentPosition);
-      await hqController.setPlaybackSpeed(currentSpeed);
-      await hqController.play();
+      // The player swaps the source in place, preserving position and speed;
+      // our listener stays attached across the swap.
+      await player.switchSource(streamUrl);
 
-      if (!mounted) {
-        hqController.dispose();
-        return;
-      }
+      if (!mounted) return;
 
-      final oldController = _controller;
       _hqPollTimer?.cancel();
       _hqPollTimer = null;
-      setState(() {
-        _controller = hqController;
-        _isPreviewMode = false;
-      });
-
-      // Tear down the preview controller only after this frame has rendered
-      // with the HQ controller — disposing it synchronously can leave the
-      // outgoing VideoPlayer reading a disposed controller mid-frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        oldController?.removeListener(_onControllerUpdate);
-        oldController?.pause();
-        oldController?.dispose();
-      });
+      setState(() => _isPreviewMode = false);
     } catch (e) {
       // HQ switch failed — keep playing preview; the poll fallback retries
       // on its next tick.
@@ -627,9 +675,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// video is also stored on this device the position is mirrored to Hive so
   /// offline resume keeps working.
   Future<void> _saveProgress() async {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
-    final position = controller.value.position.inSeconds;
+    final player = _player;
+    if (player == null || !player.isInitialized) return;
+    final position = player.position.inSeconds;
     if (position <= 0) return;
 
     if (_isOfflinePlayback) {
@@ -672,7 +720,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// banner's "Start over" action.
   void _restartFromStart() {
     _resumeBannerTimer?.cancel();
-    _controller?.seekTo(Duration.zero);
+    _player?.seekTo(Duration.zero);
     setState(() {
       _showResumeBanner = false;
       _showControls = true;
@@ -686,38 +734,48 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   void _togglePlayPause() {
-    if (_controller == null) return;
-    if (_controller!.value.isPlaying) {
-      _controller!.pause();
+    final player = _player;
+    if (player == null) return;
+    if (player.isPlaying) {
+      player.pause();
       // Save on pause so progress isn't lost if the app gets killed.
       unawaited(_saveProgress());
     } else {
-      _controller!.play();
+      player.play();
     }
     setState(() => _showControls = true);
     _scheduleHideControls();
   }
 
-  /// Controller listener that watches for end-of-video to drive queue
-  /// auto-advance. It fires on every value change, so the actual work is
-  /// guarded by [_advancing].
-  void _onControllerUpdate() {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
+  /// Enter Picture-in-Picture from the controls button. Unlike auto-PiP this
+  /// fires while the app is foregrounded, so iOS reliably starts it.
+  void _enterPipFromButton() {
+    final player = _player;
+    if (player == null) return;
+    unawaited(player.enterPip());
+    _scheduleHideControls();
+  }
+
+  /// Player listener that watches for end-of-video to drive queue auto-advance.
+  /// It fires on every playback tick, so the actual work is guarded by
+  /// [_advancing].
+  void _onPlayerUpdate() {
+    final player = _player;
+    if (player == null || !player.isInitialized) return;
     _maybeSkipAd();
-    if (controller.value.isCompleted) _handleCompletion();
+    if (player.isCompleted) _handleCompletion();
   }
 
   /// Seek past any sponsor segment the playhead has entered, flashing a brief
   /// "Skipped sponsor" toast. The 0.5s tail margin stops a seek to a segment's
   /// end from immediately re-triggering the same segment.
   void _maybeSkipAd() {
-    final controller = _controller;
-    if (controller == null || _adSegments.isEmpty) return;
-    final pos = controller.value.position.inMilliseconds / 1000.0;
+    final player = _player;
+    if (player == null || _adSegments.isEmpty) return;
+    final pos = player.position.inMilliseconds / 1000.0;
     for (final seg in _adSegments) {
       if (pos >= seg.start && pos < seg.end - 0.5) {
-        controller.seekTo(Duration(milliseconds: (seg.end * 1000).round()));
+        player.seekTo(Duration(milliseconds: (seg.end * 1000).round()));
         _flashSkipToast();
         break;
       }
@@ -809,17 +867,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     // teardown sends exactly one /progress PUT.
     _progressSavedOnExit = true;
     unawaited(_saveProgress());
-    _controller?.pause();
+    _player?.pause();
     if (mounted) {
       Navigator.of(context).pop();
     }
   }
 
   void _seekRelative(int seconds) {
-    if (_controller == null) return;
-    final current = _controller!.value.position;
-    final target = current + Duration(seconds: seconds);
-    _controller!.seekTo(target);
+    final player = _player;
+    if (player == null) return;
+    final target = player.position + Duration(seconds: seconds);
+    player.seekTo(target);
     setState(() => _showControls = true);
     _scheduleHideControls();
   }
@@ -863,6 +921,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _wsSubscription?.cancel();
     _adWsSubscription?.cancel();
     _progressTimer?.cancel();
@@ -876,11 +935,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     // Save final position (fire-and-forget; a failed save must never throw
     // out of dispose). Skipped when _navigateBack already fired the save on
     // the way out, so teardown sends exactly one /progress PUT.
-    final controller = _controller;
-    if (!_progressSavedOnExit &&
-        controller != null &&
-        controller.value.isInitialized) {
-      final position = controller.value.position.inSeconds;
+    final player = _player;
+    if (!_progressSavedOnExit && player != null && player.isInitialized) {
+      final position = player.position.inSeconds;
       if (position > 0) {
         if (_isOfflinePlayback) {
           unawaited(
@@ -894,9 +951,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         );
       }
     }
-    controller?.removeListener(_onControllerUpdate);
-    controller?.pause();
-    controller?.dispose();
+    player?.removeListener(_onPlayerUpdate);
+    player?.dispose();
     // Re-allow the screen to sleep now that playback is over.
     unawaited(WakelockPlus.disable());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -960,13 +1016,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                     ),
                   ),
                 )
-              else if (_isInitialized && _controller != null)
-                Center(
-                  child: AspectRatio(
-                    aspectRatio: _controller!.value.aspectRatio,
-                    child: VideoPlayer(_controller!),
-                  ),
-                )
+              else if (_isInitialized && _player != null)
+                _player!.buildView()
               else
                 const Center(
                   child: Column(
@@ -983,10 +1034,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                 ),
 
               // Buffering spinner while the player stalls mid-playback.
-              if (_isInitialized && _controller != null)
-                ValueListenableBuilder(
-                  valueListenable: _controller!,
-                  builder: (_, value, __) => value.isBuffering
+              if (_isInitialized && _player != null)
+                ListenableBuilder(
+                  listenable: _player!,
+                  builder: (_, __) => _player!.isBuffering
                       ? const Center(child: CircularProgressIndicator())
                       : const SizedBox.shrink(),
                 ),
@@ -1038,13 +1089,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
               // Controls overlay
               if (_showControls && _isInitialized)
                 _ControlsOverlay(
-                  controller: _controller!,
+                  player: _player!,
                   onBack: _navigateBack,
                   onSeekRelative: _seekRelative,
                   onPlayPause: _togglePlayPause,
                   onInteraction: _scheduleHideControls,
                   isQueued: isQueued,
                   onToggleQueue: video == null ? null : _toggleQueue,
+                  onPip: _pipSupported ? _enterPipFromButton : null,
                 ),
 
               // Resume affordance: playback auto-resumed from a saved position
@@ -1170,7 +1222,7 @@ class _ResumeBanner extends StatelessWidget {
 }
 
 class _ControlsOverlay extends StatelessWidget {
-  final VideoPlayerController controller;
+  final NfPlaybackController player;
   final VoidCallback onBack;
   final void Function(int) onSeekRelative;
   final VoidCallback onPlayPause;
@@ -1181,14 +1233,18 @@ class _ControlsOverlay extends StatelessWidget {
   final bool? isQueued;
   final VoidCallback? onToggleQueue;
 
+  /// Enters Picture-in-Picture. Null hides the PiP control (unsupported device).
+  final VoidCallback? onPip;
+
   const _ControlsOverlay({
-    required this.controller,
+    required this.player,
     required this.onBack,
     required this.onSeekRelative,
     required this.onPlayPause,
     required this.onInteraction,
     this.isQueued,
     this.onToggleQueue,
+    this.onPip,
   });
 
   @override
@@ -1237,10 +1293,16 @@ class _ControlsOverlay extends StatelessWidget {
                         onInteraction();
                       },
                     ),
-                  _SpeedButton(
-                    controller: controller,
-                    onInteraction: onInteraction,
-                  ),
+                  if (onPip != null)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.picture_in_picture_alt,
+                        color: Colors.white,
+                      ),
+                      tooltip: 'Picture in Picture',
+                      onPressed: onPip,
+                    ),
+                  _SpeedButton(player: player, onInteraction: onInteraction),
                 ],
               ),
             ),
@@ -1263,17 +1325,17 @@ class _ControlsOverlay extends StatelessWidget {
                     },
                   ),
                   const SizedBox(width: 32),
-                  ValueListenableBuilder(
-                    valueListenable: controller,
-                    builder: (_, value, __) => IconButton(
+                  ListenableBuilder(
+                    listenable: player,
+                    builder: (_, __) => IconButton(
                       iconSize: 64,
                       icon: Icon(
-                        value.isPlaying
+                        player.isPlaying
                             ? Icons.pause_circle_filled
                             : Icons.play_circle_filled,
                         color: Colors.white,
                       ),
-                      tooltip: value.isPlaying ? 'Pause' : 'Play',
+                      tooltip: player.isPlaying ? 'Pause' : 'Play',
                       onPressed: () {
                         onPlayPause();
                         onInteraction();
@@ -1303,11 +1365,11 @@ class _ControlsOverlay extends StatelessWidget {
                 horizontal: 16.0,
                 vertical: 8,
               ),
-              child: ValueListenableBuilder(
-                valueListenable: controller,
-                builder: (_, value, __) {
-                  final position = value.position;
-                  final duration = value.duration;
+              child: ListenableBuilder(
+                listenable: player,
+                builder: (_, __) {
+                  final position = player.position;
+                  final duration = player.duration;
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1330,7 +1392,7 @@ class _ControlsOverlay extends StatelessWidget {
                             milliseconds: (fraction * duration.inMilliseconds)
                                 .round(),
                           );
-                          controller.seekTo(target);
+                          player.seekTo(target);
                           onInteraction();
                         },
                       ),
@@ -1366,13 +1428,13 @@ class _ControlsOverlay extends StatelessWidget {
   }
 }
 
-/// Playback-speed picker shown in the controls overlay. Reflects the
-/// controller's current speed live and lets the viewer pick 0.5x–2x.
+/// Playback-speed picker shown in the controls overlay. Reflects the player's
+/// current speed live and lets the viewer pick 0.5x–2x.
 class _SpeedButton extends StatelessWidget {
-  final VideoPlayerController controller;
+  final NfPlaybackController player;
   final VoidCallback onInteraction;
 
-  const _SpeedButton({required this.controller, required this.onInteraction});
+  const _SpeedButton({required this.player, required this.onInteraction});
 
   static const List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
@@ -1385,14 +1447,14 @@ class _SpeedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder(
-      valueListenable: controller,
-      builder: (_, value, __) => PopupMenuButton<double>(
+    return ListenableBuilder(
+      listenable: player,
+      builder: (_, __) => PopupMenuButton<double>(
         tooltip: 'Playback speed',
-        initialValue: value.playbackSpeed,
+        initialValue: player.speed,
         color: NullFeedTheme.surfaceColor,
         onSelected: (speed) {
-          controller.setPlaybackSpeed(speed);
+          player.setSpeed(speed);
           onInteraction();
         },
         itemBuilder: (_) => [
@@ -1405,7 +1467,7 @@ class _SpeedButton extends StatelessWidget {
                   Icon(
                     Icons.check,
                     size: 18,
-                    color: value.playbackSpeed == speed
+                    color: player.speed == speed
                         ? NullFeedTheme.primaryColor
                         : Colors.transparent,
                   ),
@@ -1428,7 +1490,7 @@ class _SpeedButton extends StatelessWidget {
               const Icon(Icons.speed, color: Colors.white, size: 20),
               const SizedBox(width: 4),
               Text(
-                _label(value.playbackSpeed),
+                _label(player.speed),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
