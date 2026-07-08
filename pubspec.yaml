@@ -16,6 +16,10 @@ dependencies:
   riverpod_annotation: ^4.0.2
   dio: ^5.7.0
   video_player: ^2.9.2
+  # iOS-only: native Picture-in-Picture + background audio. Selected at runtime
+  # via conditional import (see lib/services/playback/); never compiled into the
+  # web bundle, which keeps using video_player above.
+  better_player_plus: ^1.3.4
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   go_router: ^17.1.0
