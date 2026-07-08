@@ -109,7 +109,12 @@ class BetterPlayerNfController extends NfPlaybackController {
   void _onEvent(BetterPlayerEvent event) {
     switch (event.betterPlayerEventType) {
       case BetterPlayerEventType.finished:
-        if (!_completed) {
+        // better_player fires a *parameter-less* `finished` whenever a seek
+        // lands past the duration — which happens with a misreported/zero
+        // duration (some streams) even mid-video. Only genuine end-of-playback
+        // carries progress/duration parameters, so treat just that as
+        // completion; otherwise a skip/scrub would auto-advance the queue.
+        if (event.parameters != null && !_completed) {
           _completed = true;
           notifyListeners();
         }
