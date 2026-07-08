@@ -174,6 +174,35 @@ void main() {
     });
   });
 
+  group('Channel', () {
+    test('parses the per-channel content filter fields', () {
+      final channel = Channel.fromJson(const {
+        'id': 'c1',
+        'youtube_channel_id': 'UC1',
+        'name': 'Chan',
+        'slug': 'chan',
+        'is_subscribed': true,
+        'hidden_content_types': ['short', 'live'],
+        'available_content_types': ['regular', 'short', 'live'],
+      });
+      expect(channel.isSubscribed, isTrue);
+      expect(channel.hiddenContentTypes, ['short', 'live']);
+      expect(channel.availableContentTypes, ['regular', 'short', 'live']);
+    });
+
+    test('defaults the filter fields when absent', () {
+      final channel = Channel.fromJson(const {
+        'id': 'c1',
+        'youtube_channel_id': 'UC1',
+        'name': 'Chan',
+        'slug': 'chan',
+      });
+      expect(channel.isSubscribed, isFalse);
+      expect(channel.hiddenContentTypes, isEmpty);
+      expect(channel.availableContentTypes, isEmpty);
+    });
+  });
+
   group('Video', () {
     test('parses a naive uploaded_at as UTC and maps the status enum', () {
       final video = Video.fromJson(const {
@@ -217,6 +246,67 @@ void main() {
       expect(video.unplayableReason, UnplayableReason.membersOnly);
       expect(video.activeUnplayableReason, UnplayableReason.membersOnly);
       expect(Video.fromJson(video.toJson()), video);
+    });
+
+    test('maps content_type and computes the badge type', () {
+      final short = Video.fromJson(const {
+        'id': 'v1',
+        'youtube_video_id': 'yt1',
+        'channel_id': 'c1',
+        'title': 'A Short',
+        'content_type': 'short',
+      });
+      expect(short.contentType, ContentType.short);
+      expect(short.badgeContentType, ContentType.short);
+      expect(Video.fromJson(short.toJson()), short);
+    });
+
+    test('regular / null / unknown content types are not badged', () {
+      Video withType(String? ct) => Video.fromJson({
+        'id': 'v1',
+        'youtube_video_id': 'yt1',
+        'channel_id': 'c1',
+        'title': 'A Video',
+        if (ct != null) 'content_type': ct,
+      });
+      expect(withType(null).contentType, isNull);
+      expect(withType(null).badgeContentType, isNull);
+      expect(withType('regular').badgeContentType, isNull);
+      // Forward-compat: an unknown type maps to unknown and isn't badged.
+      expect(withType('some_future_type').contentType, ContentType.unknown);
+      expect(withType('some_future_type').badgeContentType, isNull);
+    });
+
+    test(
+      'a playable video still badges its content type (no unplayable ban)',
+      () {
+        // members_only + a ready preview: the video is playable so the unplayable
+        // banner is suppressed, and the content-type pill shows instead.
+        final v = Video.fromJson(const {
+          'id': 'v1',
+          'youtube_video_id': 'yt1',
+          'channel_id': 'c1',
+          'title': 'A Video',
+          'content_type': 'members_only',
+          'unplayable_reason': 'members_only',
+          'preview_status': 'READY',
+        });
+        expect(v.activeUnplayableReason, isNull);
+        expect(v.badgeContentType, ContentType.membersOnly);
+      },
+    );
+
+    test('an active unplayable banner suppresses the content-type badge', () {
+      final v = Video.fromJson(const {
+        'id': 'v1',
+        'youtube_video_id': 'yt1',
+        'channel_id': 'c1',
+        'title': 'A Video',
+        'content_type': 'members_only',
+        'unplayable_reason': 'members_only',
+      });
+      expect(v.activeUnplayableReason, UnplayableReason.membersOnly);
+      expect(v.badgeContentType, isNull);
     });
 
     test(

@@ -341,6 +341,19 @@ class ApiService {
         .toList();
   });
 
+  /// Replaces the content types hidden for [channelId] (the per-channel filter).
+  /// Returns the updated channel. An empty list clears the filter.
+  Future<Channel> setContentFilter(
+    String channelId,
+    List<String> hiddenContentTypes,
+  ) => _guard(() async {
+    final response = await _dio.put(
+      '$_baseUrl${AppConstants.channelContentFilter(channelId)}',
+      data: {'hidden_content_types': hiddenContentTypes},
+    );
+    return Channel.fromJson(response.data as Map<String, dynamic>);
+  });
+
   Future<void> subscribeToChannel(
     String youtubeUrl, {
     String trackingMode = 'FUTURE_ONLY',

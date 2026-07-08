@@ -66,6 +66,8 @@ class AppConstants {
   static String authProfile(String id) => '$apiBase/auth/profiles/$id';
   static String channelDetail(String id) => '$apiBase/channels/$id';
   static String channelVideos(String id) => '$apiBase/channels/$id/videos';
+  static String channelContentFilter(String id) =>
+      '$apiBase/channels/$id/content-filter';
   static String channelPoll(String id) => '$apiBase/channels/$id/poll';
   static String channelRefreshImages(String id) =>
       '$apiBase/channels/$id/refresh-images';
