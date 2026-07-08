@@ -459,9 +459,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     player.addListener(_onPlayerUpdate);
 
     // Resume from where the viewer left off (rewound a little so they can
-    // re-orient). A fresh or fully-watched video starts from the top.
+    // re-orient). A fresh or fully-watched video starts from the top. Clamp to
+    // the player's ACTUAL duration, not the server's durationSeconds (which can
+    // be stale/wrong and would otherwise drag the resume back toward the
+    // start while the banner still shows the saved position). Mirrors the
+    // offline path.
     if (video.canResume) {
-      await player.seekTo(Duration(seconds: video.resumeSeekSeconds));
+      final resumePos =
+          (video.watchPositionSeconds - AppConstants.skipBackwardSeconds).clamp(
+            0,
+            player.duration.inSeconds,
+          );
+      await player.seekTo(Duration(seconds: resumePos));
       _resumeFromSeconds = video.watchPositionSeconds;
     }
 
