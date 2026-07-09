@@ -4,15 +4,21 @@ import '../models/channel.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
 import '../services/catalog_cache_service.dart';
+import 'session_scope_provider.dart';
 
-/// The subscribed channel list. Hydrates from the per-profile cache instantly
-/// on build (so the Library tab shows last-known channels offline without a
-/// spinner), then refreshes in the background and writes the result through to
-/// the cache. A connection error falls back to the cache; a real server error
-/// still surfaces.
+/// The global channel catalog, annotated by the API with this profile's
+/// `isSubscribed` membership state. Hydrates from the per-profile cache
+/// instantly, then refreshes in the background and writes the result through
+/// to the cache. A connection error falls back to the cache; a real server
+/// error still surfaces.
 class ChannelsNotifier extends Notifier<AsyncValue<List<Channel>>> {
+  int _requestId = 0;
+
   @override
   AsyncValue<List<Channel>> build() {
+    final scope = ref.watch(activeSessionScopeProvider);
+    _requestId++;
+    if (scope == null) return const AsyncValue.loading();
     final cached = _cache.readChannels();
     // Deferred so the load runs after build() returns and `state` exists.
     Future.microtask(load);
@@ -28,16 +34,31 @@ class ChannelsNotifier extends Notifier<AsyncValue<List<Channel>>> {
     // The build-time load is deferred, and screens invalidate this provider
     // while a fetch is in flight; bail if this element was disposed meanwhile.
     if (!ref.mounted) return;
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      state = const AsyncValue.loading();
+      return;
+    }
+    final requestId = ++_requestId;
     final api = _api;
     final cache = _cache;
     // Keep cached channels on screen while refetching; only spin when empty.
     if (!state.hasValue) state = const AsyncValue.loading();
     try {
       final channels = await api.getChannels();
+      if (!ref.mounted ||
+          requestId != _requestId ||
+          ref.read(activeSessionScopeProvider) != scope) {
+        return;
+      }
       await cache.writeChannels(channels);
-      if (ref.mounted) state = AsyncValue.data(channels);
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = AsyncValue.data(channels);
+      }
     } catch (e, st) {
-      if (ref.mounted) {
+      if (ref.mounted && requestId == _requestId) {
         state = resolveCatalogRefreshError(e, st, state, cache.readChannels());
       }
     }
@@ -66,16 +87,35 @@ final channelsProvider =
       ChannelsNotifier.new,
     );
 
+/// The active profile's Library membership.
+///
+/// `GET /channels` is deliberately a global catalog endpoint, so consumers
+/// that represent the user's Library must filter on `isSubscribed` instead of
+/// assuming every returned channel belongs to the profile.
+final subscribedChannelsProvider = Provider<AsyncValue<List<Channel>>>((ref) {
+  return ref
+      .watch(channelsProvider)
+      .whenData(
+        (channels) => channels
+            .where((channel) => channel.isSubscribed)
+            .toList(growable: false),
+      );
+});
+
 /// A single channel's detail. Hydrates from the per-profile cache instantly so
 /// the channel screen header shows offline, then refreshes and writes through.
 /// Connection errors fall back to the cache; real errors surface.
 class ChannelDetailNotifier extends Notifier<AsyncValue<Channel>> {
   late final String _channelId;
+  int _requestId = 0;
 
   void init(String channelId) => _channelId = channelId;
 
   @override
   AsyncValue<Channel> build() {
+    final scope = ref.watch(activeSessionScopeProvider);
+    _requestId++;
+    if (scope == null) return const AsyncValue.loading();
     final cached = _cache.readChannel(_channelId);
     Future.microtask(refresh);
     return cached != null
@@ -88,15 +128,30 @@ class ChannelDetailNotifier extends Notifier<AsyncValue<Channel>> {
 
   Future<void> refresh() async {
     if (!ref.mounted) return;
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      state = const AsyncValue.loading();
+      return;
+    }
+    final requestId = ++_requestId;
     final api = _api;
     final cache = _cache;
     if (!state.hasValue) state = const AsyncValue.loading();
     try {
       final channel = await api.getChannel(_channelId);
+      if (!ref.mounted ||
+          requestId != _requestId ||
+          ref.read(activeSessionScopeProvider) != scope) {
+        return;
+      }
       await cache.writeChannel(channel);
-      if (ref.mounted) state = AsyncValue.data(channel);
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = AsyncValue.data(channel);
+      }
     } catch (e, st) {
-      if (ref.mounted) {
+      if (ref.mounted && requestId == _requestId) {
         state = resolveCatalogRefreshError(
           e,
           st,
@@ -122,11 +177,15 @@ final channelDetailProvider =
 /// through. Connection errors fall back to the cache; real errors surface.
 class ChannelVideosNotifier extends Notifier<AsyncValue<List<Video>>> {
   late final String _channelId;
+  int _requestId = 0;
 
   void init(String channelId) => _channelId = channelId;
 
   @override
   AsyncValue<List<Video>> build() {
+    final scope = ref.watch(activeSessionScopeProvider);
+    _requestId++;
+    if (scope == null) return const AsyncValue.loading();
     final cached = _cache.readChannelVideos(_channelId);
     Future.microtask(refresh);
     return cached != null
@@ -139,16 +198,31 @@ class ChannelVideosNotifier extends Notifier<AsyncValue<List<Video>>> {
 
   Future<void> refresh() async {
     if (!ref.mounted) return;
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      state = const AsyncValue.loading();
+      return;
+    }
+    final requestId = ++_requestId;
     final api = _api;
     final cache = _cache;
     if (!state.hasValue) state = const AsyncValue.loading();
     try {
       final videos = await api.getChannelVideos(_channelId);
+      if (!ref.mounted ||
+          requestId != _requestId ||
+          ref.read(activeSessionScopeProvider) != scope) {
+        return;
+      }
       await cache.writeChannelVideos(_channelId, videos);
-      if (ref.mounted) state = AsyncValue.data(videos);
-      _prewarm(videos);
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = AsyncValue.data(videos);
+        _prewarm(videos);
+      }
     } catch (e, st) {
-      if (ref.mounted) {
+      if (ref.mounted && requestId == _requestId) {
         state = resolveCatalogRefreshError(
           e,
           st,

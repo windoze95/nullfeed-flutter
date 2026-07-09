@@ -37,7 +37,9 @@ Future<void> _applyToggle(
     await (wasQueued ? notifier.remove(video.id) : notifier.add(video));
     messenger.showSnackBar(
       SnackBar(
-        content: Text(wasQueued ? 'Removed from queue' : 'Added to queue'),
+        content: Text(
+          wasQueued ? 'Removed from Watch Later' : 'Saved for later',
+        ),
       ),
     );
   } on ApiException catch (e) {
@@ -61,7 +63,7 @@ class QueueActionTile extends ConsumerWidget {
     );
     return ListTile(
       leading: Icon(isQueued ? Icons.playlist_add_check : Icons.playlist_add),
-      title: Text(isQueued ? 'Remove from Queue' : 'Add to Queue'),
+      title: Text(isQueued ? 'Remove from Watch Later' : 'Save for later'),
       onTap: () {
         // Capture everything that outlives this tile before the sheet pops —
         // the messenger and notifier survive the dismissal, the element does

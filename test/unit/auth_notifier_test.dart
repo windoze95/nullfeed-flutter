@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nullfeed/providers/auth_provider.dart';
+import 'package:nullfeed/providers/session_scope_provider.dart';
+import 'package:nullfeed/providers/settings_provider.dart';
 import 'package:nullfeed/providers/websocket_provider.dart';
 import 'package:nullfeed/services/api_service.dart';
 import 'package:nullfeed/services/push_service.dart';
@@ -20,6 +22,9 @@ void main() {
     storage = MockStorageService();
     webSocket = MockWebSocketService();
     push = MockPushService();
+    when(() => storage.getServerUrl()).thenReturn('http://server-a:8484');
+    when(() => storage.setServerUrl(any())).thenAnswer((_) async {});
+    when(() => storage.getPreferredQuality()).thenReturn('1080p');
     when(() => storage.getSessionToken()).thenReturn(null);
     when(() => storage.setSelectedUserId(any())).thenAnswer((_) async {});
     when(() => storage.setSessionToken(any())).thenAnswer((_) async {});
@@ -71,6 +76,7 @@ void main() {
       expect(state.currentUser, user);
       expect(state.isLoading, isFalse);
       expect(state.restoreFailed, isFalse);
+      expect(container.read(activeSessionScopeProvider)?.userId, user.id);
       // Restore must not re-select (which would bypass PIN protection).
       verifyNever(() => api.selectProfile(any(), pin: any(named: 'pin')));
       // Silent restore refreshes the token without prompting.
@@ -187,6 +193,7 @@ void main() {
       final state = container.read(authStateProvider);
       expect(state.currentUser, bob);
       expect(state.error, isNull);
+      expect(container.read(activeSessionScopeProvider)?.userId, 'u2');
       verify(() => storage.setSelectedUserId('u2')).called(1);
       verify(() => storage.setSessionToken('tok-2')).called(1);
       // An interactive sign-in requests permission and registers for push.
@@ -266,6 +273,7 @@ void main() {
       final state = container.read(authStateProvider);
       expect(state.error, 'Could not resolve YouTube handle');
       expect(state.currentUser, isNull);
+      expect(container.read(activeSessionScopeProvider), isNull);
     });
   });
 
@@ -292,6 +300,7 @@ void main() {
 
       final state = container.read(authStateProvider);
       expect(state.currentUser, isNull);
+      expect(container.read(activeSessionScopeProvider), isNull);
       expect(state.profiles, hasLength(1), reason: 'profiles are kept');
       verify(() => api.logout()).called(1);
       verify(() => webSocket.disconnect()).called(1);
@@ -312,6 +321,37 @@ void main() {
       verify(() => webSocket.disconnect()).called(1);
       verify(() => storage.clearSession()).called(1);
     });
+  });
+
+  group('server changes', () {
+    test(
+      'signs out and clears the old scope before changing servers',
+      () async {
+        final alice = makeUser();
+        when(
+          () => api.selectProfile('u1', pin: null),
+        ).thenAnswer((_) async => (user: alice, token: 'tok-1'));
+        when(() => api.logout()).thenAnswer((_) async {});
+        final container = createContainer();
+        await container.read(authStateProvider.notifier).selectProfile('u1');
+        expect(container.read(activeSessionScopeProvider), isNotNull);
+
+        await container
+            .read(settingsProvider.notifier)
+            .setServerUrl('https://server-b.example');
+
+        expect(container.read(activeSessionScopeProvider), isNull);
+        expect(container.read(authStateProvider).currentUser, isNull);
+        expect(
+          container.read(settingsProvider).serverUrl,
+          'https://server-b.example',
+        );
+        verify(() => api.logout()).called(1);
+        verify(
+          () => storage.setServerUrl('https://server-b.example'),
+        ).called(1);
+      },
+    );
   });
 
   group('handleSessionExpired', () {
@@ -338,6 +378,7 @@ void main() {
       expect(didReset, isTrue);
       final state = container.read(authStateProvider);
       expect(state.currentUser, isNull);
+      expect(container.read(activeSessionScopeProvider), isNull);
       expect(state.profiles, hasLength(1), reason: 'profiles are kept');
       verify(() => webSocket.disconnect()).called(1);
       verify(() => storage.clearSession()).called(1);

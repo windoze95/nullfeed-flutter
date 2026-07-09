@@ -8,6 +8,8 @@ import '../providers/feed_provider.dart';
 import '../providers/search_provider.dart';
 import '../widgets/queue_action.dart';
 import '../widgets/video_list_tile.dart';
+import '../widgets/app_ui.dart';
+import '../widgets/cinematic_banner.dart';
 import '../config/theme.dart';
 
 /// Full-screen library search reached from the Library app bar. The query is
@@ -71,48 +73,52 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final notifier = ref.read(searchProvider.notifier);
 
     return Scaffold(
+      backgroundColor: NullFeedTheme.backgroundColor,
       appBar: AppBar(
-        backgroundColor: NullFeedTheme.backgroundColor,
-        titleSpacing: 0,
-        title: TextField(
-          controller: _controller,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          onChanged: notifier.search,
-          style: const TextStyle(
-            color: NullFeedTheme.textPrimary,
-            fontSize: 18,
-          ),
-          decoration: InputDecoration(
-            hintText: 'Search videos and channels',
-            filled: false,
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            suffixIcon: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _controller,
-              builder: (context, value, _) {
-                if (value.text.isEmpty) return const SizedBox.shrink();
-                return IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: 'Clear',
-                  onPressed: () {
-                    _controller.clear();
-                    notifier.clear();
-                  },
-                );
-              },
+        backgroundColor: Colors.transparent,
+        toolbarHeight: 76,
+        titleSpacing: 4,
+        title: Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: TextField(
+            controller: _controller,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onChanged: notifier.search,
+            style: const TextStyle(
+              color: NullFeedTheme.textPrimary,
+              fontSize: 16,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Search your videos and channels',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) {
+                  if (value.text.isEmpty) return const SizedBox.shrink();
+                  return IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Clear search',
+                    onPressed: () {
+                      _controller.clear();
+                      notifier.clear();
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ),
       ),
-      body: _SearchBody(
-        state: state,
-        scrollController: _scrollController,
-        onRetry: notifier.retry,
-        onVideoTap: _openVideo,
-        onVideoMenu: _showVideoMenu,
-        onChannelTap: (id) => context.push('/channel/$id'),
+      body: AppBackdrop(
+        child: _SearchBody(
+          state: state,
+          scrollController: _scrollController,
+          onRetry: notifier.retry,
+          onVideoTap: _openVideo,
+          onVideoMenu: _showVideoMenu,
+          onChannelTap: (id) => context.push('/channel/$id'),
+        ),
       ),
     );
   }
@@ -158,10 +164,12 @@ class _SearchBody extends StatelessWidget {
         iconColor: NullFeedTheme.textMuted,
         title: isQuery
             ? 'No results for "${state.query}"'
-            : 'Your library is empty',
+            : 'Search your NullFeed library',
         message: isQuery
-            ? 'Try a different title or channel name.'
-            : 'Videos you add to your library will show up here.',
+            ? 'Try a different title or channel name. Search covers content '
+                  'already known to your server.'
+            : 'Find a video or a channel already known to your server. Add a '
+                  'new YouTube channel from the Channels tab.',
       );
     }
 
@@ -270,7 +278,9 @@ class _ChannelChip extends StatelessWidget {
               CircleAvatar(
                 radius: 32,
                 backgroundColor: NullFeedTheme.cardColor,
-                backgroundImage: CachedNetworkImageProvider(channel.avatarUrl!),
+                backgroundImage: CachedNetworkImageProvider(
+                  CinematicBanner.highResolutionUrl(channel.avatarUrl!)!,
+                ),
               )
             else
               CircleAvatar(

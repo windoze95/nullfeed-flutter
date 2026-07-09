@@ -45,6 +45,7 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
   bool _creating = false;
   String? _busyStatus;
   String? _createError;
+  String? _createdUserId;
 
   ApiService get _api => ref.read(apiServiceProvider);
   StorageService get _storage => ref.read(storageServiceProvider);
@@ -104,9 +105,10 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
       setState(() {
         _loadingSuggestions = false;
         _suggestions = suggestions;
-        _selectedSuggestionIds = {
-          for (final suggestion in suggestions) suggestion.youtubeChannelId,
-        };
+        // These are inferred from public featured links/playlists, not an
+        // authoritative subscription list. Never opt the user into all of
+        // them by default.
+        _selectedSuggestionIds = {};
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -171,16 +173,22 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
       _busyStatus = 'Creating profile…';
     });
     try {
-      final user = resolved != null
-          ? await api.createProfile(
-              youtubeHandle: resolved.handle,
-              displayName: name.isEmpty ? null : name,
-              pin: pin,
-            )
-          : await api.createProfile(displayName: name, pin: pin);
+      final userId =
+          _createdUserId ??
+          (resolved != null
+                  ? await api.createProfile(
+                      youtubeHandle: resolved.handle,
+                      displayName: name.isEmpty ? null : name,
+                      pin: pin,
+                    )
+                  : await api.createProfile(displayName: name, pin: pin))
+              .id;
+      // If selecting or subscribing fails after creation, retry the remaining
+      // work against this profile instead of creating a duplicate.
+      _createdUserId = userId;
 
       // Select the new profile so a session token exists for bulk subscribe.
-      final result = await api.selectProfile(user.id, pin: pin);
+      final result = await api.selectProfile(userId, pin: pin);
       await storage.setSelectedUserId(result.user.id);
       await storage.setSessionToken(result.token);
 
@@ -242,143 +250,146 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Profile')),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            TextField(
-              controller: _nameController,
-              enabled: !_creating,
-              maxLength: 50,
-              onChanged: (_) => _nameEdited = true,
-              decoration: const InputDecoration(
-                labelText: 'Display name',
-                counterText: '',
-                prefixIcon: Icon(Icons.person_outline),
+    return PopScope(
+      canPop: !_creating,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Add Profile')),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              TextField(
+                controller: _nameController,
+                enabled: !_creating,
+                maxLength: 50,
+                onChanged: (_) => _nameEdited = true,
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  counterText: '',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'Import from YouTube (optional)',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Look up a YouTube profile to copy its name and avatar, and '
-              'follow the channels it follows.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _handleController,
-                    enabled: !_creating && !_resolving,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      hintText: '@handle or channel URL',
-                      prefixIcon: Icon(Icons.alternate_email),
-                    ),
-                    onSubmitted: (_) => _lookupHandle(),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _creating || _resolving ? null : _lookupHandle,
-                  child: _resolving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Lookup'),
-                ),
-              ],
-            ),
-            if (_resolveError != null) ...[
+              const SizedBox(height: 32),
+              Text(
+                'Import from YouTube (optional)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               Text(
-                _resolveError!,
-                style: const TextStyle(
-                  color: NullFeedTheme.errorColor,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-            if (_resolvedProfile != null) ...[
-              const SizedBox(height: 16),
-              _IdentityPreviewCard(
-                profile: _resolvedProfile!,
-                onClear: _creating ? null : _clearImport,
+                'Look up a YouTube profile to copy its name and avatar, and '
+                'optionally choose from related public channels.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 16),
-              _buildSuggestionsSection(context),
-            ],
-            const SizedBox(height: 32),
-            Text(
-              'PIN (optional)',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Require a 4-8 digit PIN to open this profile.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _PinField(
-                    controller: _pinController,
-                    enabled: !_creating,
-                    hint: 'PIN',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _handleController,
+                      enabled: !_creating && !_resolving,
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      decoration: const InputDecoration(
+                        hintText: '@handle or channel URL',
+                        prefixIcon: Icon(Icons.alternate_email),
+                      ),
+                      onSubmitted: (_) => _lookupHandle(),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _PinField(
-                    controller: _pinConfirmController,
-                    enabled: !_creating,
-                    hint: 'Confirm PIN',
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _creating || _resolving ? null : _lookupHandle,
+                    child: _resolving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Lookup'),
+                  ),
+                ],
+              ),
+              if (_resolveError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _resolveError!,
+                  style: const TextStyle(
+                    color: NullFeedTheme.errorColor,
+                    fontSize: 13,
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 32),
-            if (_createError != null) ...[
-              Text(
-                _createError!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: NullFeedTheme.errorColor,
-                  fontSize: 13,
+              if (_resolvedProfile != null) ...[
+                const SizedBox(height: 16),
+                _IdentityPreviewCard(
+                  profile: _resolvedProfile!,
+                  onClear: _creating ? null : _clearImport,
                 ),
+                const SizedBox(height: 16),
+                _buildSuggestionsSection(context),
+              ],
+              const SizedBox(height: 32),
+              Text(
+                'PIN (optional)',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              Text(
+                'Require a 4-8 digit PIN to open this profile.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PinField(
+                      controller: _pinController,
+                      enabled: !_creating,
+                      hint: 'PIN',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _PinField(
+                      controller: _pinConfirmController,
+                      enabled: !_creating,
+                      hint: 'Confirm PIN',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              if (_createError != null) ...[
+                Text(
+                  _createError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: NullFeedTheme.errorColor,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              ElevatedButton(
+                onPressed: _creating ? null : _create,
+                child: _creating
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(_busyStatus ?? 'Creating profile…'),
+                        ],
+                      )
+                    : const Text('Create Profile'),
+              ),
             ],
-            ElevatedButton(
-              onPressed: _creating ? null : _create,
-              child: _creating
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(_busyStatus ?? 'Creating profile…'),
-                      ],
-                    )
-                  : const Text('Create Profile'),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -395,7 +406,7 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
           ),
           SizedBox(width: 12),
           Text(
-            'Finding channels they follow…',
+            'Looking for related public channels…',
             style: TextStyle(color: NullFeedTheme.textSecondary),
           ),
         ],
@@ -443,7 +454,7 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
           children: [
             Expanded(
               child: Text(
-                'Channels they follow',
+                'Related public channels',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -453,6 +464,12 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'These come from public featured links and playlists—not a private '
+          'YouTube subscription list. Nothing is selected automatically.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
         Container(

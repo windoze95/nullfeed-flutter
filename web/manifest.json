@@ -1,12 +1,12 @@
 {
-    "name": "nullfeed",
-    "short_name": "nullfeed",
+    "name": "NullFeed",
+    "short_name": "NullFeed",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#07090D",
+    "theme_color": "#07090D",
+    "description": "Your private, self-hosted YouTube library.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

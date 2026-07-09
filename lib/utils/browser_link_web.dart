@@ -28,3 +28,10 @@ String cookieExtensionUrl() {
 void openInNewTab(String url) {
   web.window.open(url, '_blank');
 }
+
+/// The Flutter web bundle is served by the NullFeed backend itself, so its
+/// origin is the correct server address on first launch.
+String? currentBrowserOrigin() {
+  final origin = web.window.location.origin;
+  return origin.isEmpty ? null : origin;
+}

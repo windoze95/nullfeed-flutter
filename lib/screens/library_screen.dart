@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../models/channel.dart';
 import '../providers/channel_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/app_ui.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/adaptive_layout.dart';
 import '../config/theme.dart';
@@ -13,7 +14,9 @@ import '../config/theme.dart';
 enum _LibrarySort { alphabetical, recentlyUpdated }
 
 class LibraryScreen extends ConsumerStatefulWidget {
-  const LibraryScreen({super.key});
+  const LibraryScreen({super.key, this.showAddChannel = false});
+
+  final bool showAddChannel;
 
   @override
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
@@ -21,6 +24,16 @@ class LibraryScreen extends ConsumerStatefulWidget {
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   _LibrarySort _sort = _LibrarySort.recentlyUpdated;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showAddChannel) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSubscribeDialog();
+      });
+    }
+  }
 
   void _showSubscribeDialog() {
     showDialog<void>(
@@ -52,13 +65,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   void _showChannelMenu(Channel channel) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NullFeedTheme.cardColor,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.open_in_new),
+              leading: const Icon(Icons.open_in_new_rounded),
               title: Text(channel.name),
               subtitle: const Text('Open channel'),
               onTap: () {
@@ -66,21 +78,53 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 context.push('/channel/${channel.id}');
               },
             ),
-            ListTile(
-              leading: const Icon(
-                Icons.remove_circle_outline,
-                color: NullFeedTheme.errorColor,
+            if (channel.isSubscribed)
+              ListTile(
+                leading: const Icon(
+                  Icons.remove_circle_outline_rounded,
+                  color: NullFeedTheme.errorColor,
+                ),
+                title: const Text('Unsubscribe'),
+                subtitle: const Text('Remove from this profile\'s Library'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _confirmUnsubscribe(channel);
+                },
+              )
+            else
+              ListTile(
+                leading: const Icon(
+                  Icons.add_circle_outline_rounded,
+                  color: NullFeedTheme.primaryColor,
+                ),
+                title: const Text('Subscribe'),
+                subtitle: const Text('Add to this profile\'s Library'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _subscribeToExistingChannel(channel);
+                },
               ),
-              title: const Text('Unsubscribe'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _confirmUnsubscribe(channel);
-              },
-            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _subscribeToExistingChannel(Channel channel) async {
+    try {
+      await ref
+          .read(channelsProvider.notifier)
+          .subscribe(channel.youtubeChannelId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Added ${channel.name} to your Library')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _confirmUnsubscribe(Channel channel) async {
@@ -90,7 +134,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         backgroundColor: NullFeedTheme.cardColor,
         title: Text('Unsubscribe from ${channel.name}?'),
         content: const Text(
-          'New videos from this channel will no longer appear in your feed.',
+          'This removes the channel from this profile\'s Library. New uploads '
+          'will no longer appear in Home.',
         ),
         actions: [
           TextButton(
@@ -110,10 +155,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      // Call the API directly so a failure never wipes the loaded list.
-      await ref.read(apiServiceProvider).unsubscribeFromChannel(channel.id);
-      if (!mounted) return;
-      await ref.read(channelsProvider.notifier).load();
+      await ref.read(channelsProvider.notifier).unsubscribe(channel.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unsubscribed from ${channel.name}')),
@@ -128,150 +170,142 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final channels = ref.watch(channelsProvider);
+    final channels = ref.watch(subscribedChannelsProvider);
     final padding = AdaptiveLayout.contentPadding(context);
 
     return Scaffold(
-      body: RefreshIndicator(
-        color: NullFeedTheme.primaryColor,
-        onRefresh: () {
-          // Kick a server-side poll for new uploads alongside the reload.
-          unawaited(
-            ref.read(apiServiceProvider).pollAllChannels().catchError((_) {}),
-          );
-          return ref.read(channelsProvider.notifier).load();
-        },
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverAppBar(
-              floating: true,
-              title: const Text('Library'),
-              backgroundColor: NullFeedTheme.backgroundColor,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.playlist_play),
-                  tooltip: 'Queue',
-                  onPressed: () => context.push('/queue'),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Search',
-                  onPressed: () => context.push('/search'),
-                ),
-                PopupMenuButton<_LibrarySort>(
-                  icon: const Icon(Icons.sort),
-                  tooltip: 'Sort',
-                  initialValue: _sort,
-                  onSelected: (value) => setState(() => _sort = value),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: _LibrarySort.recentlyUpdated,
-                      child: Text('Recently updated'),
-                    ),
-                    PopupMenuItem(
-                      value: _LibrarySort.alphabetical,
-                      child: Text('A–Z'),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _showSubscribeDialog,
-                ),
-              ],
-            ),
-            channels.when(
-              data: (channelList) {
-                if (channelList.isEmpty) {
-                  return SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.video_library_outlined,
-                            size: 64,
-                            color: NullFeedTheme.textMuted,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No channels yet',
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap + to subscribe to a YouTube channel',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
+      body: AppBackdrop(
+        child: RefreshIndicator(
+          color: NullFeedTheme.primaryColor,
+          onRefresh: () {
+            // Kick a server-side poll for new uploads alongside the reload.
+            unawaited(
+              ref.read(apiServiceProvider).pollAllChannels().catchError((_) {}),
+            );
+            return ref.read(channelsProvider.notifier).load();
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                floating: true,
+                title: const Text('Channels'),
+                actions: [
+                  PopupMenuButton<_LibrarySort>(
+                    icon: const Icon(Icons.sort_rounded),
+                    tooltip: 'Sort channels',
+                    initialValue: _sort,
+                    onSelected: (value) => setState(() => _sort = value),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: _LibrarySort.recentlyUpdated,
+                        child: Text('Recently updated'),
                       ),
-                    ),
-                  );
-                }
-                final sorted = _sortedChannels(channelList);
-                return SliverPadding(
-                  padding: EdgeInsets.all(padding),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 400,
-                          childAspectRatio: 16 / 10,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final channel = sorted[index];
-                      return ChannelCard(
-                        channel: channel,
-                        onTap: () => context.push('/channel/${channel.id}'),
-                        onMenu: () => _showChannelMenu(channel),
-                      );
-                    }, childCount: sorted.length),
+                      PopupMenuItem(
+                        value: _LibrarySort.alphabetical,
+                        child: Text('A–Z'),
+                      ),
+                    ],
                   ),
-                );
-              },
-              loading: () => const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
+                ],
               ),
-              error: (error, _) => SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+              SliverToBoxAdapter(
+                child: PageIntro(
+                  eyebrow: 'Your collection',
+                  title: 'Channels you follow',
+                  description:
+                      'This Library belongs to the current profile. Add a '
+                      'channel once and new uploads will surface automatically.',
+                  bottom: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
                     children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 48,
-                        color: NullFeedTheme.errorColor,
+                      QuickActionButton(
+                        icon: Icons.add_rounded,
+                        label: 'Add channel',
+                        onTap: _showSubscribeDialog,
+                        emphasized: true,
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Failed to load channels',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      QuickActionButton(
+                        icon: Icons.search_rounded,
+                        label: 'Search videos',
+                        onTap: () => context.push('/search'),
                       ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Text(
-                          '$error',
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton(
-                        onPressed: () =>
-                            ref.read(channelsProvider.notifier).load(),
-                        child: const Text('Retry'),
+                      QuickActionButton(
+                        icon: Icons.playlist_play_rounded,
+                        label: 'Watch later',
+                        onTap: () => context.push('/queue'),
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
-          ],
+              channels.when(
+                data: (channelList) {
+                  if (channelList.isEmpty) {
+                    return SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: padding),
+                        child: EmptyStatePanel(
+                          icon: Icons.video_library_outlined,
+                          eyebrow: 'Start your Library',
+                          title: 'Follow your first channel',
+                          description:
+                              'Paste a YouTube channel link or @handle. '
+                              'NullFeed will add it to this profile and watch '
+                              'for new uploads.',
+                          steps: const [
+                            'Copy a channel URL or @handle from YouTube.',
+                            'Add it here — NullFeed handles the rest.',
+                          ],
+                          primaryAction: _showSubscribeDialog,
+                          primaryLabel: 'Add your first channel',
+                        ),
+                      ),
+                    );
+                  }
+                  final sorted = _sortedChannels(channelList);
+                  return SliverPadding(
+                    padding: EdgeInsets.fromLTRB(padding, 4, padding, padding),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 400,
+                            childAspectRatio: 16 / 10,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                          ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final channel = sorted[index];
+                        return ChannelCard(
+                          channel: channel,
+                          onTap: () => context.push('/channel/${channel.id}'),
+                          onMenu: () => _showChannelMenu(channel),
+                        );
+                      }, childCount: sorted.length),
+                    ),
+                  );
+                },
+                loading: () => const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, _) => SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: padding),
+                    child: EmptyStatePanel(
+                      icon: Icons.cloud_off_rounded,
+                      eyebrow: 'Library unavailable',
+                      title: 'We couldn\'t load your channels',
+                      description: '$error',
+                      primaryAction: () =>
+                          ref.read(channelsProvider.notifier).load(),
+                      primaryLabel: 'Try again',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -300,7 +334,13 @@ class _SubscribeDialogState extends ConsumerState<_SubscribeDialog> {
 
   Future<void> _submit() async {
     final url = _urlController.text.trim();
-    if (url.isEmpty || _isSubmitting) return;
+    if (_isSubmitting) return;
+    if (url.isEmpty) {
+      setState(() {
+        _errorText = 'Enter a channel URL, @handle, or channel ID.';
+      });
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -315,7 +355,7 @@ class _SubscribeDialogState extends ConsumerState<_SubscribeDialog> {
       final channelsNotifier = ref.read(channelsProvider.notifier);
       Navigator.pop(context);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Subscribed — fetching videos…')),
+        const SnackBar(content: Text('Added to Library — checking uploads…')),
       );
       unawaited(channelsNotifier.load());
     } on ApiException catch (e) {
@@ -337,18 +377,31 @@ class _SubscribeDialogState extends ConsumerState<_SubscribeDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: NullFeedTheme.cardColor,
-      title: const Text('Subscribe to Channel'),
+      title: const Text('Add a YouTube channel'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'Paste a channel URL, @handle, or channel ID. It will be added to '
+            'this profile\'s Library, and new uploads will appear automatically.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
           TextField(
             controller: _urlController,
             autofocus: true,
             enabled: !_isSubmitting,
+            autocorrect: false,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.url],
             onSubmitted: (_) => _submit(),
             decoration: const InputDecoration(
-              hintText: 'YouTube channel URL or ID',
-              prefixIcon: Icon(Icons.link),
+              labelText: 'Channel link or @handle',
+              hintText: 'youtube.com/@channel',
+              helperText: 'Example: @mkbhd or a youtube.com/channel/... link',
+              prefixIcon: Icon(Icons.link_rounded),
             ),
           ),
           if (_errorText != null)
@@ -377,7 +430,7 @@ class _SubscribeDialogState extends ConsumerState<_SubscribeDialog> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Subscribe'),
+              : const Text('Add to Library'),
         ),
       ],
     );

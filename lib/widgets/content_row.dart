@@ -9,6 +9,13 @@ class ContentRow extends StatelessWidget {
   final List<Widget> children;
   final bool isLoading;
 
+  /// Optional context that explains why the row exists or what tapping does.
+  final String? subtitle;
+
+  /// Optional labelled action at the end of the section heading.
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
   /// When non-null, renders an inline error state instead of [children].
   final String? errorText;
 
@@ -20,6 +27,9 @@ class ContentRow extends StatelessWidget {
     required this.title,
     required this.children,
     this.isLoading = false,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
     this.errorText,
     this.onRetry,
   });
@@ -27,18 +37,44 @@ class ContentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final padding = AdaptiveLayout.contentPadding(context);
-    // Grow the row with the (root-clamped) text scale so card titles keep their
-    // room as Dynamic Type gets larger.
+    // Give larger text extra metadata room without doubling the artwork too.
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final rowHeight =
-        AppConstants.contentRowHeight *
-        MediaQuery.textScalerOf(context).scale(1.0);
+        AppConstants.contentRowHeight +
+        (textScale > 1 ? (textScale - 1) * 76 : 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(padding, 24, padding, 12),
-          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          padding: EdgeInsets.fromLTRB(padding, 30, padding, 13),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleLarge),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (actionLabel != null && onAction != null)
+                TextButton.icon(
+                  onPressed: onAction,
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                  iconAlignment: IconAlignment.end,
+                  label: Text(actionLabel!),
+                ),
+            ],
+          ),
         ),
         SizedBox(
           height: rowHeight,
@@ -109,7 +145,8 @@ class ContentRow extends StatelessWidget {
           width: AppConstants.videoCardWidth,
           decoration: BoxDecoration(
             color: NullFeedTheme.cardColor,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: NullFeedTheme.borderColor),
           ),
         ),
       ),

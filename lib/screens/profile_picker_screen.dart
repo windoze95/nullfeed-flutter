@@ -8,8 +8,10 @@ import '../models/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
+import '../utils/browser_link.dart';
 import '../widgets/pin_entry_dialog.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/app_ui.dart';
 import 'add_profile_screen.dart';
 
 class ProfilePickerScreen extends ConsumerStatefulWidget {
@@ -32,6 +34,15 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
     final settings = ref.read(settingsProvider);
     if (settings.serverUrl == null || settings.serverUrl!.isEmpty) {
       _showServerSetup = true;
+      final browserOrigin = currentBrowserOrigin();
+      if (browserOrigin != null) {
+        // Web is served by the backend, so asking users to discover and type
+        // the very origin they are already visiting only adds failure points.
+        _serverUrlController.text = browserOrigin;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _connectToServer();
+        });
+      }
     } else {
       _serverUrlController.text = settings.serverUrl!;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -344,50 +355,68 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
     }
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.rss_feed,
-                  size: 56,
-                  color: NullFeedTheme.primaryColor,
+      backgroundColor: NullFeedTheme.backgroundColor,
+      body: AppBackdrop(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 980),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const NullFeedMark(),
+                    const SizedBox(height: 36),
+                    const AppStatusPill(
+                      label: 'PERSONAL SPACE',
+                      icon: Icons.person_outline_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Who\'s watching?',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                    const SizedBox(height: 9),
+                    Text(
+                      'Choose a profile so watch history, suggestions, and '
+                      'progress stay personal.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (authState.restoreFailed) ...[
+                      const SizedBox(height: 24),
+                      _RestoreFailedBanner(
+                        onRetry: () =>
+                            ref.read(authStateProvider.notifier).retryRestore(),
+                      ),
+                    ],
+                    const SizedBox(height: 34),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child:
+                          authState.isLoading && authState.profiles.isNotEmpty
+                          ? const SizedBox(
+                              key: ValueKey('loading'),
+                              width: 220,
+                              child: LinearProgressIndicator(minHeight: 3),
+                            )
+                          : const SizedBox(key: ValueKey('idle'), height: 3),
+                    ),
+                    const SizedBox(height: 18),
+                    _buildProfilesArea(authState),
+                    const SizedBox(height: 38),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        _serverError = null;
+                        _showServerSetup = true;
+                      }),
+                      icon: const Icon(Icons.dns_outlined, size: 18),
+                      label: const Text('Server Settings'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Who\'s watching?',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                if (authState.restoreFailed) ...[
-                  const SizedBox(height: 24),
-                  _RestoreFailedBanner(
-                    onRetry: () =>
-                        ref.read(authStateProvider.notifier).retryRestore(),
-                  ),
-                ],
-                const SizedBox(height: 40),
-                SizedBox(
-                  height: 2,
-                  width: 200,
-                  child: authState.isLoading && authState.profiles.isNotEmpty
-                      ? const LinearProgressIndicator()
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                _buildProfilesArea(authState),
-                const SizedBox(height: 48),
-                TextButton.icon(
-                  onPressed: () => setState(() {
-                    _serverError = null;
-                    _showServerSetup = true;
-                  }),
-                  icon: const Icon(Icons.settings, size: 18),
-                  label: const Text('Server Settings'),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -439,88 +468,160 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
         (ref.read(settingsProvider).serverUrl ?? '').isNotEmpty;
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(48),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.rss_feed,
-                  size: 72,
-                  color: NullFeedTheme.primaryColor,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'NullFeed',
-                  style: Theme.of(context).textTheme.headlineLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Connect to your server',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: 400,
-                  child: TextField(
-                    controller: _serverUrlController,
-                    enabled: !_checkingServer,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      hintText: AppConstants.serverUrlHint,
-                      prefixIcon: Icon(Icons.dns_outlined),
-                    ),
-                    onSubmitted: (_) => _connectToServer(),
-                  ),
-                ),
-                if (_serverError != null) ...[
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: 400,
-                    child: Text(
-                      _serverError!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: NullFeedTheme.errorColor,
-                        fontSize: 13,
+      backgroundColor: NullFeedTheme.backgroundColor,
+      body: AppBackdrop(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 540),
+                child: Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: NullFeedTheme.surfaceColor.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: NullFeedTheme.borderColor),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x52000000),
+                        blurRadius: 42,
+                        offset: Offset(0, 18),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _checkingServer ? null : _connectToServer,
-                  child: _checkingServer
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Connect'),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          NullFeedMark(compact: true),
+                          AppStatusPill(label: 'STEP 1 OF 2'),
+                        ],
+                      ),
+                      const SizedBox(height: 34),
+                      Text(
+                        'Connect to your server',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        'NullFeed runs on hardware you control. Enter the '
+                        'address you use to open it on this network.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: _serverUrlController,
+                        enabled: !_checkingServer,
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        decoration: const InputDecoration(
+                          labelText: 'Server address',
+                          hintText: AppConstants.serverUrlHint,
+                          helperText: 'Usually an IP address followed by :8484',
+                          prefixIcon: Icon(Icons.dns_outlined),
+                        ),
+                        onSubmitted: (_) => _connectToServer(),
+                      ),
+                      if (_serverError != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: NullFeedTheme.errorColor.withValues(
+                              alpha: 0.08,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: NullFeedTheme.errorColor.withValues(
+                                alpha: 0.2,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            _serverError!,
+                            style: const TextStyle(
+                              color: NullFeedTheme.errorColor,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _checkingServer ? null : _connectToServer,
+                          icon: _checkingServer
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 18,
+                                ),
+                          label: const Text('Connect'),
+                        ),
+                      ),
+                      if (_serverError != null)
+                        Center(
+                          child: TextButton(
+                            onPressed: _checkingServer
+                                ? null
+                                : () => _connectToServer(skipHealthCheck: true),
+                            child: const Text('Save anyway'),
+                          ),
+                        ),
+                      if (hasExistingServer)
+                        Center(
+                          child: TextButton(
+                            onPressed: _checkingServer
+                                ? null
+                                : () => setState(() {
+                                    _serverUrlController.text =
+                                        ref.read(settingsProvider).serverUrl ??
+                                        '';
+                                    _serverError = null;
+                                    _showServerSetup = false;
+                                  }),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                      const SizedBox(height: 14),
+                      const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            size: 16,
+                            color: NullFeedTheme.textMuted,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Your address stays on this device. Your media '
+                              'and watch history stay on your server.',
+                              style: TextStyle(
+                                color: NullFeedTheme.textMuted,
+                                fontSize: 11,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                if (_serverError != null)
-                  TextButton(
-                    onPressed: _checkingServer
-                        ? null
-                        : () => _connectToServer(skipHealthCheck: true),
-                    child: const Text('Save anyway'),
-                  ),
-                if (hasExistingServer)
-                  TextButton(
-                    onPressed: _checkingServer
-                        ? null
-                        : () => setState(() {
-                            _serverUrlController.text =
-                                ref.read(settingsProvider).serverUrl ?? '';
-                            _serverError = null;
-                            _showServerSetup = false;
-                          }),
-                    child: const Text('Cancel'),
-                  ),
-              ],
+              ),
             ),
           ),
         ),
@@ -636,73 +737,96 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onShowOptions,
-      child: SizedBox(
-        width: 120,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              children: [
-                ProfileAvatar(
-                  name: profile.displayName,
-                  avatarUrl: profile.avatarUrl,
-                  serverBaseUrl: serverBaseUrl,
-                  size: 120,
-                  borderRadius: 16,
-                ),
-                if (profile.hasPin)
-                  Positioned(
-                    left: 6,
-                    top: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.black54,
-                        shape: BoxShape.circle,
+    return SizedBox(
+      width: 154,
+      child: Semantics(
+        button: true,
+        label: 'Continue as ${profile.displayName}',
+        child: Material(
+          color: NullFeedTheme.cardColor.withValues(alpha: 0.86),
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(color: NullFeedTheme.borderColor),
+            borderRadius: BorderRadius.circular(22),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onShowOptions,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    children: [
+                      ProfileAvatar(
+                        name: profile.displayName,
+                        avatarUrl: profile.avatarUrl,
+                        serverBaseUrl: serverBaseUrl,
+                        size: 128,
+                        borderRadius: 17,
                       ),
-                      child: const Icon(
-                        Icons.lock,
-                        size: 14,
-                        color: Colors.white70,
+                      if (profile.hasPin)
+                        Positioned(
+                          left: 7,
+                          top: 7,
+                          child: Container(
+                            width: 29,
+                            height: 29,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.7),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.14),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.lock,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        right: 1,
+                        top: 1,
+                        child: IconButton(
+                          onPressed: onShowOptions,
+                          icon: const Icon(Icons.more_horiz_rounded, size: 19),
+                          color: Colors.white,
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.black.withValues(
+                              alpha: 0.66,
+                            ),
+                          ),
+                          tooltip: 'Profile actions',
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    profile.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: NullFeedTheme.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                Positioned(
-                  right: 4,
-                  top: 4,
-                  child: GestureDetector(
-                    onTap: onShowOptions,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.black54,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.more_horiz,
-                        size: 16,
-                        color: Colors.white70,
-                      ),
+                  const SizedBox(height: 3),
+                  Text(
+                    profile.hasPin ? 'PIN protected' : 'Tap to continue',
+                    style: const TextStyle(
+                      color: NullFeedTheme.textMuted,
+                      fontSize: 10,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              profile.displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: NullFeedTheme.textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -716,36 +840,57 @@ class _AddProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 120,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: NullFeedTheme.cardColor,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.add,
-                size: 48,
-                color: NullFeedTheme.textMuted,
-              ),
+    return SizedBox(
+      width: 154,
+      child: Material(
+        color: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(color: NullFeedTheme.borderColor),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: const Padding(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 128,
+                  height: 128,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: NullFeedTheme.cardColor,
+                      borderRadius: BorderRadius.all(Radius.circular(17)),
+                    ),
+                    child: Icon(
+                      Icons.person_add_alt_1_rounded,
+                      size: 40,
+                      color: NullFeedTheme.primaryColor,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Add Profile',
+                  style: TextStyle(
+                    color: NullFeedTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Create a personal space',
+                  style: TextStyle(
+                    color: NullFeedTheme.textMuted,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'Add Profile',
-              style: TextStyle(
-                color: NullFeedTheme.textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

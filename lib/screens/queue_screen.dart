@@ -6,6 +6,7 @@ import '../providers/feed_provider.dart';
 import '../providers/queue_provider.dart';
 import '../widgets/queue_action.dart';
 import '../widgets/video_list_tile.dart';
+import '../widgets/app_ui.dart';
 import '../config/theme.dart';
 
 /// The watch-later queue, reached from the Library app bar. Lists queued videos
@@ -65,18 +66,20 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Queue'),
+        title: const Text('Watch later'),
         backgroundColor: NullFeedTheme.backgroundColor,
       ),
-      body: RefreshIndicator(
-        color: NullFeedTheme.primaryColor,
-        onRefresh: () => ref.read(queueProvider.notifier).refresh(),
-        child: _QueueBody(
-          state: state,
-          scrollController: _scrollController,
-          onRetry: () => ref.read(queueProvider.notifier).refresh(),
-          onVideoTap: (video) => _openVideo(video.id),
-          onVideoMenu: _showMenu,
+      body: AppBackdrop(
+        child: RefreshIndicator(
+          color: NullFeedTheme.primaryColor,
+          onRefresh: () => ref.read(queueProvider.notifier).refresh(),
+          child: _QueueBody(
+            state: state,
+            scrollController: _scrollController,
+            onRetry: () => ref.read(queueProvider.notifier).refresh(),
+            onVideoTap: (video) => _openVideo(video.id),
+            onVideoMenu: _showMenu,
+          ),
         ),
       ),
     );
@@ -122,7 +125,7 @@ class _QueueBody extends StatelessWidget {
         child: _QueueMessage(
           icon: Icons.error_outline,
           iconColor: NullFeedTheme.errorColor,
-          title: 'Could not load your queue',
+          title: 'Could not load Watch Later',
           message: state.error!,
           onRetry: onRetry,
         ),
@@ -134,10 +137,10 @@ class _QueueBody extends StatelessWidget {
         child: _QueueMessage(
           icon: Icons.playlist_play,
           iconColor: NullFeedTheme.textMuted,
-          title: 'Your queue is empty',
+          title: 'Nothing saved for later yet',
           message:
-              'Add videos to watch later from any video’s menu, the '
-              'player, or a channel.',
+              'Choose “Save for later” from a video menu or the player. '
+              'Videos only play through this list when you start here.',
         ),
       );
     }

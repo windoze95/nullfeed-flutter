@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/active_session_scope.dart';
 import '../services/storage_service.dart';
+import 'auth_provider.dart';
+import 'session_scope_provider.dart';
 
 class SettingsState {
   final String? serverUrl;
@@ -38,6 +41,13 @@ class SettingsNotifier extends Notifier<SettingsState> {
   StorageService get _storage => ref.read(storageServiceProvider);
 
   Future<void> setServerUrl(String url) async {
+    final activeScope = ref.read(activeSessionScopeProvider);
+    final normalizedUrl = ActiveSessionScope.normalizeServerUrl(url);
+    if (activeScope != null && activeScope.serverUrl != normalizedUrl) {
+      // Tokens, profile ids, and every user-domain cache belong to the old
+      // server. Sign out while that URL is still configured, then switch.
+      await ref.read(authStateProvider.notifier).signOut();
+    }
     await _storage.setServerUrl(url);
     state = state.copyWith(serverUrl: url);
   }
