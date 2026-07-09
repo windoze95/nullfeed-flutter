@@ -99,6 +99,16 @@ class AppConstants {
   static const int skipForwardSeconds = 10;
   static const int skipBackwardSeconds = 10;
 
+  /// Hold-to-seek: holding a skip control scrubs continuously. The rate starts
+  /// at [holdSeekInitialRate] video-seconds per held second and ramps linearly
+  /// by [holdSeekRampPerSecond] each second, capped at [holdSeekMaxRate].
+  static const double holdSeekInitialRate = 8;
+  static const double holdSeekRampPerSecond = 12;
+  static const double holdSeekMaxRate = 120;
+
+  /// How often the hold-to-seek ticker advances the target position.
+  static const int holdSeekTickMs = 100;
+
   /// How long to wait for a server-side preview/HQ render before giving up and
   /// showing a graceful "taking longer than expected" message instead of an
   /// indefinite spinner.
