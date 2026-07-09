@@ -93,6 +93,9 @@ class _SkipControlState extends State<SkipControl>
           'Press and hold to $holdVerb.',
       child: Tooltip(
         message: 'Skip $direction ${widget.seconds}s — hold to $holdVerb',
+        // Never trigger on long-press (the touch default): that would race
+        // the hold-to-seek gesture in the arena. Hover still shows it.
+        triggerMode: TooltipTriggerMode.manual,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _handleTap,
