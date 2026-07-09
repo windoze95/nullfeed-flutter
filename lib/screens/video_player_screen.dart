@@ -16,6 +16,7 @@ import '../config/constants.dart';
 import '../config/theme.dart';
 import '../widgets/progress_bar.dart';
 import '../widgets/queue_action.dart';
+import '../widgets/skip_control.dart';
 import '../widgets/unplayable_badge.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
@@ -76,6 +77,28 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// auto-skip so a manual scrub through a sponsor segment isn't fought by an
   /// auto-seek — competing seeks on a still-buffering source wedge the player.
   bool _isScrubbing = false;
+
+  /// The 0–1 fraction under the finger while the seek bar is being dragged;
+  /// null when idle. No seek is issued during the drag — this only lets the
+  /// overlay preview the target timestamp until release commits one seek.
+  double? _scrubPreviewFraction;
+
+  /// Where the playhead should end up once the in-flight native seek lands;
+  /// null when no seek is wanted. All manual seeks funnel through
+  /// [_requestSeek] → [_drainSeeks]: exactly one native `seekTo` is ever
+  /// outstanding, and newer requests coalesce here instead of each firing
+  /// their own. Re-seeking while a seek is still buffering cancels and
+  /// restarts it — storming that wedges the player (stutter → freeze →
+  /// crash), the same failure mode [sponsorSkipDecision] guards against.
+  Duration? _pendingSeekTarget;
+  bool _seekInFlight = false;
+
+  /// Hold-to-seek: +1 / -1 while a skip control is held, 0 when idle.
+  int _holdSeekDirection = 0;
+  Timer? _holdSeekTimer;
+  Duration _holdSeekBase = Duration.zero;
+  double _holdSeekAccumulated = 0;
+  double _holdSeekElapsed = 0;
 
   /// Set once auto-advance has fired so a stream of post-completion ticks can't
   /// trigger it again.
@@ -701,6 +724,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       debugPrint('HQ switch failed, continuing preview: $e');
     } finally {
       _switchingToHq = false;
+      // A manual seek requested mid-swap was parked (the drain pauses while
+      // the swap owns the player) — issue it now.
+      if (_pendingSeekTarget != null) unawaited(_drainSeeks());
     }
   }
 
@@ -733,6 +759,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   }
 
   void _toggleControls() {
+    // Hiding the overlay would dispose the held skip control mid-gesture and
+    // its release callback with it — end the hold first so the ticker stops.
+    if (_holdSeekDirection != 0) _endHoldSeek();
     setState(() => _showControls = !_showControls);
     if (_showControls) _scheduleHideControls();
   }
@@ -753,7 +782,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// banner's "Start over" action.
   void _restartFromStart() {
     _resumeBannerTimer?.cancel();
-    _player?.seekTo(Duration.zero);
+    _requestSeek(Duration.zero);
     setState(() {
       _showResumeBanner = false;
       _showControls = true;
@@ -809,11 +838,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     final player = _player;
     if (player == null || _adSegments.isEmpty) return;
     // Stand down while the viewer is scrubbing (a manual drag through a sponsor
-    // mustn't be fought by an auto-seek — competing seeks wedge the player), and
-    // during the HQ swap: setResolution reinitializes the source in place (its
-    // position momentarily reads 0) and re-seeks to the restored spot, so a
-    // skip-seek there fights the swap's own seek — the "finished caching" freeze.
-    if (_isScrubbing || _switchingToHq) return;
+    // mustn't be fought by an auto-seek — competing seeks wedge the player),
+    // while a manual seek is pending or landing (same reason; the playhead the
+    // decision would read is stale anyway), and during the HQ swap:
+    // setResolution reinitializes the source in place (its position
+    // momentarily reads 0) and re-seeks to the restored spot, so a skip-seek
+    // there fights the swap's own seek — the "finished caching" freeze.
+    if (_isScrubbing ||
+        _switchingToHq ||
+        _seekInFlight ||
+        _pendingSeekTarget != null) {
+      return;
+    }
     final pos = player.position.inMilliseconds / 1000.0;
     final decision = sponsorSkipDecision(
       pos,
@@ -823,7 +859,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _skipSeekInFlightEnd = decision.inFlightEnd;
     final target = decision.seekToMs;
     if (target != null) {
-      player.seekTo(Duration(milliseconds: target));
+      _requestSeek(Duration(milliseconds: target), fromAutoSkip: true);
       _flashSkipToast();
     }
   }
@@ -874,12 +910,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// let go so a manual scrub through a sponsor isn't fought by an auto-seek.
   void _onScrubStart() => _isScrubbing = true;
 
+  /// Live drag position from the seek bar; no seek is issued — this only
+  /// drives the previewed timestamp in the overlay until release.
+  void _onScrubUpdate(double fraction) {
+    setState(() => _scrubPreviewFraction = fraction);
+  }
+
   /// The viewer released the seek bar. Resume auto-skip and drop any in-flight
   /// skip guard: a manual reposition voids the prior seek, so a sponsor the
   /// viewer landed inside is skipped once, fresh, from the released position.
   void _onScrubEnd() {
     _isScrubbing = false;
     _skipSeekInFlightEnd = null;
+    if (_scrubPreviewFraction != null) {
+      setState(() => _scrubPreviewFraction = null);
+    }
   }
 
   /// When the video plays through to the end, advance into the queue: consume
@@ -934,8 +979,24 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   void _seekRelative(int seconds) {
     final player = _player;
     if (player == null) return;
-    var target = player.position + Duration(seconds: seconds);
-    // Never skip onto/past the end. The player reports a seek beyond the
+    // Accumulate from the pending target, not the playhead: while a seek is
+    // still buffering the reported position is stale, so three quick forward
+    // taps must mean +30s, not three re-seeks to the same +10s spot.
+    final base = _pendingSeekTarget ?? player.position;
+    _requestSeek(base + Duration(seconds: seconds));
+    setState(() => _showControls = true);
+    _scheduleHideControls();
+  }
+
+  /// Requests a seek to [target], clamped to the playable range. Every manual
+  /// seek (taps, double-taps, keyboard, scrub release, hold-to-seek) and the
+  /// sponsor auto-skip funnel through here so [_drainSeeks] can keep exactly
+  /// one native seek in flight at a time.
+  void _requestSeek(Duration target, {bool fromAutoSkip = false}) {
+    final player = _player;
+    if (player == null) return;
+    var clamped = target;
+    // Never seek onto/past the end. The player reports a seek beyond the
     // duration as "finished" (video_player flips isCompleted at the end just
     // the same), which would auto-advance to the next queued video instead of
     // just nudging the playhead — so a skip-forward near the end must stay a
@@ -943,12 +1004,103 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     final duration = player.duration;
     if (duration > Duration.zero) {
       final maxTarget = duration - const Duration(seconds: 1);
-      if (target > maxTarget) target = maxTarget;
+      if (clamped > maxTarget) clamped = maxTarget;
     }
-    if (target < Duration.zero) target = Duration.zero;
-    player.seekTo(target);
-    setState(() => _showControls = true);
+    if (clamped < Duration.zero) clamped = Duration.zero;
+    // A manual reposition voids any in-flight sponsor skip-seek, so a sponsor
+    // the viewer lands inside is skipped once, fresh, from the new position.
+    if (!fromAutoSkip) _skipSeekInFlightEnd = null;
+    _pendingSeekTarget = clamped;
+    unawaited(_drainSeeks());
+  }
+
+  /// Issues pending seeks one at a time, waiting for each native seek to land
+  /// before starting the next; requests that arrive mid-seek coalesce into
+  /// [_pendingSeekTarget] and only the newest is issued next. While the HQ
+  /// swap is replacing the source the drain pauses ([_switchToHq] resumes it)
+  /// so a manual seek can't fight the swap's own restore-position seek.
+  Future<void> _drainSeeks() async {
+    if (_seekInFlight) return;
+    _seekInFlight = true;
+    try {
+      while (true) {
+        final target = _pendingSeekTarget;
+        final player = _player;
+        if (target == null || player == null || _switchingToHq) break;
+        try {
+          await player.seekTo(target);
+        } catch (_) {
+          // A failed native seek is dropped, not retried — the next user
+          // action issues a fresh one.
+        }
+        if (!mounted) break;
+        if (_pendingSeekTarget == target) {
+          _pendingSeekTarget = null;
+          break;
+        }
+        // A newer target arrived while that seek was landing (hold-to-seek
+        // does this every tick) — brief spacing so back-to-back seeks still
+        // can't storm the player.
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+      }
+    } finally {
+      _seekInFlight = false;
+    }
+  }
+
+  /// Begins hold-to-seek in [direction] (+1 forward, -1 back): the target
+  /// advances continuously while the control is held, starting slow and
+  /// ramping linearly (see [holdSeekRateAt]). Targets go through the
+  /// serialized seek pipeline, so frames update as each seek lands without
+  /// ever storming the player.
+  void _startHoldSeek(int direction) {
+    final player = _player;
+    if (player == null) return;
+    _holdSeekTimer?.cancel();
+    _holdSeekBase = _pendingSeekTarget ?? player.position;
+    _holdSeekAccumulated = 0;
+    _holdSeekElapsed = 0;
+    // Pin the controls while the hold is active; _endHoldSeek reschedules.
+    _hideControlsTimer?.cancel();
+    setState(() {
+      _holdSeekDirection = direction;
+      _showControls = true;
+    });
+    const tickSeconds = AppConstants.holdSeekTickMs / 1000.0;
+    _holdSeekTimer = Timer.periodic(
+      const Duration(milliseconds: AppConstants.holdSeekTickMs),
+      (_) {
+        _holdSeekElapsed += tickSeconds;
+        setState(() {
+          _holdSeekAccumulated +=
+              holdSeekRateAt(_holdSeekElapsed) * tickSeconds;
+        });
+        _requestSeek(
+          _holdSeekBase +
+              Duration(
+                milliseconds: (_holdSeekDirection * _holdSeekAccumulated * 1000)
+                    .round(),
+              ),
+        );
+      },
+    );
+  }
+
+  void _endHoldSeek() {
+    if (_holdSeekDirection == 0) return;
+    _holdSeekTimer?.cancel();
+    _holdSeekTimer = null;
+    setState(() => _holdSeekDirection = 0);
     _scheduleHideControls();
+  }
+
+  /// "+37s" / "-1:12" — the accumulated hold-to-seek amount shown in the held
+  /// skip control's label.
+  String _holdSeekLabel() {
+    final seconds = _holdSeekAccumulated.round();
+    final sign = _holdSeekDirection < 0 ? '-' : '+';
+    if (seconds < 60) return '$sign${seconds}s';
+    return '$sign${_formatTimestamp(Duration(seconds: seconds))}';
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -994,6 +1146,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     _adWsSubscription?.cancel();
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
+    _holdSeekTimer?.cancel();
     _resumeBannerTimer?.cancel();
     _skipToastTimer?.cancel();
     _previewTimeout?.cancel();
@@ -1163,8 +1316,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   player: _player!,
                   onBack: _navigateBack,
                   onSeekRelative: _seekRelative,
+                  onSeekAbsolute: _requestSeek,
                   onSeekStart: _onScrubStart,
+                  onScrubUpdate: _onScrubUpdate,
                   onSeekEnd: _onScrubEnd,
+                  scrubPreviewFraction: _scrubPreviewFraction,
+                  holdDirection: _holdSeekDirection,
+                  holdLabel: _holdSeekDirection != 0 ? _holdSeekLabel() : null,
+                  onHoldStart: _startHoldSeek,
+                  onHoldEnd: _endHoldSeek,
                   onPlayPause: _togglePlayPause,
                   onInteraction: _scheduleHideControls,
                   isQueued: isQueued,
@@ -1268,6 +1428,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   return (seekToMs: null, inFlightEnd: inFlightEnd);
 }
 
+/// Hold-to-seek rate (video-seconds per held second) after the control has
+/// been held for [heldSeconds]: starts at [AppConstants.holdSeekInitialRate]
+/// and ramps linearly by [AppConstants.holdSeekRampPerSecond] each second,
+/// capped at [AppConstants.holdSeekMaxRate]. Pure, so the ramp is
+/// unit-testable without a live player.
+@visibleForTesting
+double holdSeekRateAt(double heldSeconds) {
+  final rate =
+      AppConstants.holdSeekInitialRate +
+      AppConstants.holdSeekRampPerSecond * heldSeconds;
+  return rate > AppConstants.holdSeekMaxRate
+      ? AppConstants.holdSeekMaxRate
+      : rate;
+}
+
 /// Formats a playback timestamp as M:SS, or H:MM:SS once it crosses an hour.
 String _formatTimestamp(Duration d) {
   final hours = d.inHours;
@@ -1340,10 +1515,29 @@ class _ControlsOverlay extends StatelessWidget {
   final VoidCallback onBack;
   final void Function(int) onSeekRelative;
 
+  /// Commits a seek to an absolute position (scrub release / bar tap). All
+  /// seeks funnel through the screen's serialized pipeline.
+  final void Function(Duration) onSeekAbsolute;
+
   /// Called when the viewer begins / ends dragging the seek bar, so the screen
   /// can suspend sponsor auto-skip during a manual scrub.
   final VoidCallback onSeekStart;
   final VoidCallback onSeekEnd;
+
+  /// Live drag fraction during a scrub, so the timestamp previews the target.
+  final void Function(double) onScrubUpdate;
+
+  /// The 0–1 fraction being previewed while the seek bar is dragged; null
+  /// when idle. Set alongside [onScrubUpdate] by the screen.
+  final double? scrubPreviewFraction;
+
+  /// Hold-to-seek passthroughs: which control is held (+1/-1, 0 idle), the
+  /// accumulated-amount label to show on it, and the start/end callbacks.
+  final int holdDirection;
+  final String? holdLabel;
+  final void Function(int direction) onHoldStart;
+  final VoidCallback onHoldEnd;
+
   final VoidCallback onPlayPause;
   final VoidCallback onInteraction;
 
@@ -1365,8 +1559,15 @@ class _ControlsOverlay extends StatelessWidget {
     required this.player,
     required this.onBack,
     required this.onSeekRelative,
+    required this.onSeekAbsolute,
     required this.onSeekStart,
+    required this.onScrubUpdate,
     required this.onSeekEnd,
+    required this.scrubPreviewFraction,
+    required this.holdDirection,
+    required this.holdLabel,
+    required this.onHoldStart,
+    required this.onHoldEnd,
     required this.onPlayPause,
     required this.onInteraction,
     required this.isFullscreen,
@@ -1451,17 +1652,18 @@ class _ControlsOverlay extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    iconSize: 48,
-                    icon: const Icon(Icons.replay_10, color: Colors.white),
-                    tooltip:
-                        'Skip back ${AppConstants.skipBackwardSeconds} seconds',
-                    onPressed: () {
+                  SkipControl(
+                    forward: false,
+                    seconds: AppConstants.skipBackwardSeconds,
+                    holdLabel: holdDirection == -1 ? holdLabel : null,
+                    onTap: () {
                       onSeekRelative(-AppConstants.skipBackwardSeconds);
                       onInteraction();
                     },
+                    onHoldStart: () => onHoldStart(-1),
+                    onHoldEnd: onHoldEnd,
                   ),
-                  const SizedBox(width: 32),
+                  const SizedBox(width: 24),
                   ListenableBuilder(
                     listenable: player,
                     builder: (_, __) => IconButton(
@@ -1479,16 +1681,17 @@ class _ControlsOverlay extends StatelessWidget {
                       },
                     ),
                   ),
-                  const SizedBox(width: 32),
-                  IconButton(
-                    iconSize: 48,
-                    icon: const Icon(Icons.forward_10, color: Colors.white),
-                    tooltip:
-                        'Skip forward ${AppConstants.skipForwardSeconds} seconds',
-                    onPressed: () {
+                  const SizedBox(width: 24),
+                  SkipControl(
+                    forward: true,
+                    seconds: AppConstants.skipForwardSeconds,
+                    holdLabel: holdDirection == 1 ? holdLabel : null,
+                    onTap: () {
                       onSeekRelative(AppConstants.skipForwardSeconds);
                       onInteraction();
                     },
+                    onHoldStart: () => onHoldStart(1),
+                    onHoldEnd: onHoldEnd,
                   ),
                 ],
               ),
@@ -1505,14 +1708,24 @@ class _ControlsOverlay extends StatelessWidget {
               child: ListenableBuilder(
                 listenable: player,
                 builder: (_, __) {
-                  final position = player.position;
                   final duration = player.duration;
+                  // While scrubbing, the position label previews the drag
+                  // target (highlighted) instead of the still-playing head —
+                  // the seek itself only fires on release.
+                  final preview = scrubPreviewFraction;
+                  final position = preview != null && duration > Duration.zero
+                      ? Duration(
+                          milliseconds: (duration.inMilliseconds * preview)
+                              .round(),
+                        )
+                      : player.position;
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       NullFeedProgressBar(
                         progress: duration.inMilliseconds > 0
-                            ? position.inMilliseconds / duration.inMilliseconds
+                            ? player.position.inMilliseconds /
+                                  duration.inMilliseconds
                             : 0,
                         height: 4,
                         semanticLabel: 'Video position',
@@ -1525,13 +1738,15 @@ class _ControlsOverlay extends StatelessWidget {
                               '${_formatTimestamp(duration)}';
                         },
                         onSeek: (fraction) {
-                          final target = Duration(
-                            milliseconds: (fraction * duration.inMilliseconds)
-                                .round(),
+                          onSeekAbsolute(
+                            Duration(
+                              milliseconds: (fraction * duration.inMilliseconds)
+                                  .round(),
+                            ),
                           );
-                          player.seekTo(target);
                           onInteraction();
                         },
+                        onSeekPreview: onScrubUpdate,
                         onSeekStart: onSeekStart,
                         onSeekEnd: onSeekEnd,
                       ),
@@ -1541,8 +1756,10 @@ class _ControlsOverlay extends StatelessWidget {
                         children: [
                           Text(
                             _formatTimestamp(position),
-                            style: const TextStyle(
-                              color: Colors.white70,
+                            style: TextStyle(
+                              color: preview != null
+                                  ? NullFeedTheme.primaryColor
+                                  : Colors.white70,
                               fontSize: 12,
                             ),
                           ),
