@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/constants.dart';
 import '../models/video.dart';
 import '../services/api_service.dart';
+import 'session_scope_provider.dart';
 
 /// Immutable state for the watch-later queue: the loaded [videos] in play
 /// order (front first), the pagination cursor and total, plus the loading and
@@ -75,6 +76,10 @@ class QueueNotifier extends Notifier<QueueState> {
 
   @override
   QueueState build() {
+    final scope = ref.watch(activeSessionScopeProvider);
+    // Invalidate requests and optimistic rollbacks from the previous scope.
+    _requestId++;
+    if (scope == null) return const QueueState();
     // Deferred so the synchronous part runs after build() returns and `state`
     // exists.
     Future.microtask(load);
@@ -87,11 +92,20 @@ class QueueNotifier extends Notifier<QueueState> {
   /// screen while the request is in flight (the Queue screen only shows a
   /// full-screen spinner when nothing is loaded yet).
   Future<void> load() async {
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      state = const QueueState();
+      return;
+    }
     final requestId = ++_requestId;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final page = await _api.getQueue();
-      if (requestId != _requestId) return;
+      if (!ref.mounted ||
+          requestId != _requestId ||
+          ref.read(activeSessionScopeProvider) != scope) {
+        return;
+      }
       state = state.copyWith(
         videos: page.items,
         nextCursor: page.nextCursor,
@@ -102,7 +116,7 @@ class QueueNotifier extends Notifier<QueueState> {
       );
       _prewarm(page.items);
     } catch (e) {
-      if (requestId != _requestId) return;
+      if (!ref.mounted || requestId != _requestId) return;
       state = state.copyWith(
         isLoading: false,
         error: e is ApiException ? e.message : 'Failed to load your queue.',
@@ -135,12 +149,18 @@ class QueueNotifier extends Notifier<QueueState> {
       return;
     }
     final requestId = _requestId;
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) return;
     final cursor = state.nextCursor;
     state = state.copyWith(isLoadingMore: true);
     try {
       final page = await _api.getQueue(cursor: cursor);
       // A reload started while this page was in flight — drop the result.
-      if (requestId != _requestId) return;
+      if (!ref.mounted ||
+          requestId != _requestId ||
+          ref.read(activeSessionScopeProvider) != scope) {
+        return;
+      }
       state = state.copyWith(
         videos: [...state.videos, ...page.items],
         nextCursor: page.nextCursor,
@@ -149,7 +169,7 @@ class QueueNotifier extends Notifier<QueueState> {
         isLoadingMore: false,
       );
     } catch (_) {
-      if (requestId != _requestId) return;
+      if (!ref.mounted || requestId != _requestId) return;
       // Keep what's loaded; just stop the footer spinner.
       state = state.copyWith(isLoadingMore: false);
     }
@@ -161,6 +181,11 @@ class QueueNotifier extends Notifier<QueueState> {
   /// already in the loaded queue, since adding is idempotent.
   Future<void> add(Video video) async {
     if (state.isQueued(video.id)) return;
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      throw const ApiException(message: 'No active profile');
+    }
+    final requestId = _requestId;
     final previous = state;
     state = state.copyWith(
       videos: [...state.videos, video],
@@ -169,7 +194,11 @@ class QueueNotifier extends Notifier<QueueState> {
     try {
       await _api.addToQueue(video.id);
     } catch (_) {
-      state = previous;
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = previous;
+      }
       rethrow;
     }
   }
@@ -179,6 +208,11 @@ class QueueNotifier extends Notifier<QueueState> {
   /// (e.g. it lives on an unfetched page) the server is still told to remove
   /// it — there's just nothing to roll back.
   Future<void> remove(String videoId) async {
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      throw const ApiException(message: 'No active profile');
+    }
+    final requestId = _requestId;
     if (!state.isQueued(videoId)) {
       await _api.removeFromQueue(videoId);
       return;
@@ -191,7 +225,11 @@ class QueueNotifier extends Notifier<QueueState> {
     try {
       await _api.removeFromQueue(videoId);
     } catch (_) {
-      state = previous;
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = previous;
+      }
       rethrow;
     }
   }
@@ -203,14 +241,13 @@ class QueueNotifier extends Notifier<QueueState> {
   /// The id of the item to play after [finishedId] finishes, or null if the
   /// queue can't advance. Pure — does not mutate the queue.
   ///
-  /// When [finishedId] is in the queue, returns the item directly after it;
-  /// when it isn't (the video was opened from outside the queue), returns the
-  /// queue's head so a finished video still flows into a non-empty queue.
+  /// When [finishedId] is in Watch Later, returns the item directly after it.
+  /// A video opened elsewhere never jumps into this list unexpectedly.
   String? nextAfter(String finishedId) {
     final q = state.videos;
     if (q.isEmpty) return null;
     final i = q.indexWhere((v) => v.id == finishedId);
-    if (i == -1) return q.first.id;
+    if (i == -1) return null;
     if (i + 1 < q.length) return q[i + 1].id;
     return null;
   }

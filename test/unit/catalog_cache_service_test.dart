@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,7 @@ void main() {
   setUp(() async {
     hiveDir = await setUpTestHive();
     storage = StorageService();
+    await storage.setServerUrl('http://server-a:8484');
     await storage.setSelectedUserId('u1');
     cache = CatalogCacheService(storage: storage);
   });
@@ -89,6 +91,21 @@ void main() {
       expect(cache.readChannels(), hasLength(1), reason: 'u1 cache intact');
     });
 
+    test('the same profile id never crosses server boundaries', () async {
+      await cache.writeChannels([makeChannel(id: 'server-a-channel')]);
+      expect(cache.readChannels(), hasLength(1));
+
+      await storage.setServerUrl('https://server-b.example');
+      expect(cache.readChannels(), isNull, reason: 'server B sees nothing');
+
+      await storage.setServerUrl('HTTP://SERVER-A:8484/');
+      expect(
+        cache.readChannels()?.single.id,
+        'server-a-channel',
+        reason: 'normalization returns to server A scope',
+      );
+    });
+
     test('reads and writes are no-ops while signed out', () async {
       await storage.setSelectedUserId(null);
       await cache.writeChannels([makeChannel()]);
@@ -100,13 +117,23 @@ void main() {
   });
 
   group('corrupt entries', () {
-    test('a malformed entry reads as null instead of throwing', () async {
-      // Inject a stale-schema / truncated value under our scope's key.
-      await Hive.box(
-        AppConstants.catalogCacheBox,
-      ).put('u1::channels', 'not-json');
+    test('legacy profile-only entries are ignored even when valid', () async {
+      final legacy = jsonEncode([makeChannel(id: 'legacy').toJson()]);
+      await Hive.box(AppConstants.catalogCacheBox).put('u1::channels', legacy);
 
       expect(cache.readChannels(), isNull);
     });
+
+    test(
+      'a malformed scoped entry reads as null instead of throwing',
+      () async {
+        await cache.writeChannels([makeChannel()]);
+        final key =
+            Hive.box(AppConstants.catalogCacheBox).keys.single as String;
+        await Hive.box(AppConstants.catalogCacheBox).put(key, 'not-json');
+
+        expect(cache.readChannels(), isNull);
+      },
+    );
   });
 }

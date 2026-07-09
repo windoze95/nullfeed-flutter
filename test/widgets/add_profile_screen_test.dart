@@ -121,14 +121,14 @@ void main() {
     expect(find.text('Channel Two'), findsOneWidget);
     expect(find.text('From public playlists'), findsOneWidget);
     expect(find.text('Featured channel'), findsOneWidget);
-    expect(find.text('2 of 2 selected'), findsOneWidget);
+    expect(find.text('0 of 2 selected'), findsOneWidget);
 
-    // All suggestions are checked by default and can be toggled.
+    // Inferred public channels are opt-in; nothing is followed silently.
     final checkboxes = tester
         .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
         .toList();
-    expect(checkboxes.every((tile) => tile.value ?? false), isTrue);
-    await tester.tap(find.text('Channel Two'));
+    expect(checkboxes.every((tile) => !(tile.value ?? false)), isTrue);
+    await tester.tap(find.text('Channel One'));
     await tester.pumpAndSettle();
     expect(find.text('1 of 2 selected'), findsOneWidget);
     await tester.tap(find.text('Channel Two'));

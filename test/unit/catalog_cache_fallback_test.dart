@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:nullfeed/models/feed.dart';
 import 'package:nullfeed/providers/channel_provider.dart';
 import 'package:nullfeed/providers/feed_provider.dart';
+import 'package:nullfeed/providers/session_scope_provider.dart';
 import 'package:nullfeed/services/api_service.dart';
 import 'package:nullfeed/services/catalog_cache_service.dart';
 import 'package:nullfeed/services/storage_service.dart';
@@ -26,7 +27,7 @@ void main() {
   setUp(() async {
     hiveDir = await setUpTestHive();
     api = MockApiService();
-    storage = FakeStorageService();
+    storage = FakeStorageService(serverUrl: 'http://server-a:8484');
     await storage.setSelectedUserId('u1');
   });
 
@@ -42,11 +43,17 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    container
+        .read(activeSessionScopeProvider.notifier)
+        .activate(serverUrl: 'http://server-a:8484', userId: 'u1');
     return container;
   }
 
   CatalogCacheService cacheOf(ProviderContainer c) =>
       c.read(catalogCacheServiceProvider);
+
+  Future<void> settle() =>
+      Future<void>.delayed(const Duration(milliseconds: 20));
 
   group('channelsProvider', () {
     test('writes through to the cache on a successful load', () async {
@@ -55,6 +62,7 @@ void main() {
       final container = createContainer();
 
       await container.read(channelsProvider.notifier).load();
+      await settle();
 
       expect(container.read(channelsProvider).value, channels);
       expect(cacheOf(container).readChannels(), channels);
@@ -67,6 +75,7 @@ void main() {
       when(() => api.getChannels()).thenThrow(connectionError);
 
       await container.read(channelsProvider.notifier).load();
+      await settle();
 
       final state = container.read(channelsProvider);
       expect(state.hasError, isFalse);
@@ -78,6 +87,7 @@ void main() {
       when(() => api.getChannels()).thenThrow(serverError);
 
       await container.read(channelsProvider.notifier).load();
+      await settle();
 
       expect(container.read(channelsProvider).hasError, isTrue);
     });
@@ -87,6 +97,7 @@ void main() {
       when(() => api.getChannels()).thenThrow(connectionError);
 
       await container.read(channelsProvider.notifier).load();
+      await settle();
 
       expect(container.read(channelsProvider).hasError, isTrue);
     });
@@ -106,6 +117,7 @@ void main() {
       expect(container.read(homeFeedProvider).value, cachedFeed);
 
       await container.read(homeFeedProvider.notifier).refresh();
+      await settle();
 
       expect(container.read(homeFeedProvider).value, fresh);
       expect(cacheOf(container).readHomeFeed(), fresh);
@@ -118,6 +130,7 @@ void main() {
       when(() => api.getHomeFeed()).thenThrow(connectionError);
 
       await container.read(homeFeedProvider.notifier).refresh();
+      await settle();
 
       final state = container.read(homeFeedProvider);
       expect(state.hasError, isFalse);
@@ -133,6 +146,7 @@ void main() {
       when(() => api.getChannelVideos('c1')).thenThrow(connectionError);
 
       await container.read(channelVideosProvider('c1').notifier).refresh();
+      await settle();
 
       final state = container.read(channelVideosProvider('c1'));
       expect(state.hasError, isFalse);
@@ -145,6 +159,7 @@ void main() {
       when(() => api.getChannelVideos('c1')).thenAnswer((_) async => videos);
 
       await container.read(channelVideosProvider('c1').notifier).refresh();
+      await settle();
 
       expect(container.read(channelVideosProvider('c1')).value, videos);
       expect(cacheOf(container).readChannelVideos('c1'), videos);

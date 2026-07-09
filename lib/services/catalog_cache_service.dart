@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import '../config/constants.dart';
+import '../models/active_session_scope.dart';
 import '../models/channel.dart';
 import '../models/feed.dart';
 import '../models/video.dart';
@@ -40,10 +41,9 @@ AsyncValue<T> resolveCatalogRefreshError<T>(
 ///
 /// Entries are the Freezed models' JSON (`toJson`) stored as a string, which
 /// round-trips through the same `fromJson` the network path uses. Every key is
-/// scoped to the active profile ([StorageService.getSelectedUserId]) so
-/// switching profiles never surfaces another profile's catalog, and a re-login
-/// as the same profile keeps its cache. Reads and writes are no-ops while
-/// signed out (no scope).
+/// scoped to both the normalized server URL and active profile, so switching
+/// either boundary never surfaces another session's catalog. Reads and writes
+/// are no-ops while signed out or before a server is configured.
 class CatalogCacheService {
   CatalogCacheService({required this.storage});
 
@@ -51,8 +51,12 @@ class CatalogCacheService {
 
   Box get _box => Hive.box(AppConstants.catalogCacheBox);
 
-  /// The active profile's id, or null when signed out.
-  String? get _scope => storage.getSelectedUserId();
+  /// Versioned server/profile scope, or null when signed out/unconfigured.
+  /// Legacy profile-only keys intentionally do not match this prefix.
+  String? get _scope => ActiveSessionScope.tryCreate(
+    serverUrl: storage.getServerUrl(),
+    userId: storage.getSelectedUserId(),
+  )?.cacheKeyPrefix;
 
   /// Builds a profile-scoped key, or null when there is no active profile (in
   /// which case callers skip the read/write entirely).

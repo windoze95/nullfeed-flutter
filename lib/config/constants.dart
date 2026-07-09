@@ -133,5 +133,7 @@ class AppConstants {
   static const double cardAspectRatio = 16 / 9;
   static const double channelCardWidth = 280.0;
   static const double videoCardWidth = 320.0;
-  static const double contentRowHeight = 200.0;
+  // A 320pt 16:9 thumbnail is 180pt tall before title, channel, and progress
+  // metadata. The previous 200pt rail clipped its own cards.
+  static const double contentRowHeight = 258.0;
 }

@@ -1,45 +1,87 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/recommendation.dart';
 import '../services/api_service.dart';
+import 'session_scope_provider.dart';
 
 class DiscoverNotifier extends Notifier<AsyncValue<List<Recommendation>>> {
+  int _requestId = 0;
+
   @override
   AsyncValue<List<Recommendation>> build() {
-    load();
+    final scope = ref.watch(activeSessionScopeProvider);
+    _requestId++;
+    if (scope == null) return const AsyncValue.loading();
+    Future.microtask(load);
     return const AsyncValue.loading();
   }
 
   ApiService get _api => ref.read(apiServiceProvider);
 
   Future<void> load() async {
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      state = const AsyncValue.loading();
+      return;
+    }
+    final requestId = ++_requestId;
     state = const AsyncValue.loading();
     try {
       final recs = await _api.getRecommendations();
-      state = AsyncValue.data(recs);
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = AsyncValue.data(recs);
+      }
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (ref.mounted && requestId == _requestId) {
+        state = AsyncValue.error(e, st);
+      }
     }
   }
 
   Future<void> dismiss(String id) async {
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) return;
+    final requestId = ++_requestId;
+    final previous = state.value;
+    // Remove the card immediately, but keep the previous list so a per-card
+    // failure never replaces the entire Explore screen with an error state.
+    if (previous != null) {
+      state = AsyncValue.data(previous.where((rec) => rec.id != id).toList());
+    }
     try {
       await _api.dismissRecommendation(id);
-      state.whenData((recs) {
-        state = AsyncValue.data(recs.where((r) => r.id != id).toList());
-      });
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
+    } catch (_) {
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope &&
+          previous != null) {
+        state = AsyncValue.data(previous);
+      }
+      rethrow;
     }
   }
 
   Future<void> refresh() async {
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      state = const AsyncValue.loading();
+      return;
+    }
+    final requestId = ++_requestId;
     state = const AsyncValue.loading();
     try {
       await _api.refreshRecommendations();
       final recs = await _api.getRecommendations();
-      state = AsyncValue.data(recs);
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = AsyncValue.data(recs);
+      }
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (ref.mounted && requestId == _requestId) {
+        state = AsyncValue.error(e, st);
+      }
     }
   }
 }

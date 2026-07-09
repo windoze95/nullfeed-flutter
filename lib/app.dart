@@ -51,15 +51,16 @@ class _NullFeedAppState extends ConsumerState<NullFeedApp>
       themeMode: ThemeMode.dark,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
-      // Honor the platform Dynamic Type setting, but clamp the extremes so the
-      // fixed-size cards and rows don't break at very large accessibility sizes.
+      // Honor accessibility text sizes up to 200%. Content cards clamp their
+      // own labels and primary screens scroll, so readability wins over a
+      // tightly frozen layout.
       builder: (context, child) {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(
             textScaler: mq.textScaler.clamp(
-              minScaleFactor: 0.8,
-              maxScaleFactor: 1.3,
+              minScaleFactor: 0.9,
+              maxScaleFactor: 2.0,
             ),
           ),
           child: child!,

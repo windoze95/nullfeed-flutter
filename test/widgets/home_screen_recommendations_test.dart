@@ -7,6 +7,7 @@ import 'package:nullfeed/models/channel.dart';
 import 'package:nullfeed/models/feed.dart';
 import 'package:nullfeed/models/recommendation.dart';
 import 'package:nullfeed/screens/home_screen.dart';
+import 'package:nullfeed/providers/session_scope_provider.dart';
 import 'package:nullfeed/services/api_service.dart';
 import 'package:nullfeed/services/storage_service.dart';
 
@@ -47,6 +48,9 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    container
+        .read(activeSessionScopeProvider.notifier)
+        .activate(serverUrl: 'http://test.local:8484', userId: 'u1');
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -56,6 +60,11 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> revealRecommendations(WidgetTester tester) async {
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
     await tester.pumpAndSettle();
   }
 
@@ -72,6 +81,7 @@ void main() {
     );
 
     await pumpHome(tester);
+    await revealRecommendations(tester);
 
     expect(find.text('Recommended for you'), findsOneWidget);
     expect(find.text('Veritasium'), findsOneWidget);
@@ -112,6 +122,7 @@ void main() {
     when(() => api.dismissRecommendation(any())).thenAnswer((_) async {});
 
     await pumpHome(tester);
+    await revealRecommendations(tester);
 
     // The rail sits below the (tall) empty-feed state, so bring the button into
     // view before tapping it.

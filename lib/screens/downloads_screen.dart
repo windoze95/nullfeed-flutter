@@ -6,6 +6,7 @@ import '../providers/feed_provider.dart';
 import '../providers/offline_provider.dart';
 import '../services/offline_service.dart';
 import '../widgets/adaptive_layout.dart';
+import '../widgets/app_ui.dart';
 import '../config/theme.dart';
 
 /// Offline library: videos the user has explicitly saved to this device.
@@ -85,67 +86,71 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
     final padding = AdaptiveLayout.contentPadding(context);
 
     return Scaffold(
-      body: RefreshIndicator(
-        color: NullFeedTheme.primaryColor,
-        onRefresh: _refresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            const SliverAppBar(
-              floating: true,
-              title: Text('Offline'),
-              backgroundColor: NullFeedTheme.backgroundColor,
-            ),
-            if (offlineVideos.isEmpty)
+      backgroundColor: Colors.transparent,
+      body: AppBackdrop(
+        child: RefreshIndicator(
+          color: NullFeedTheme.primaryColor,
+          onRefresh: _refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
               SliverToBoxAdapter(
-                child: _EmptyNote(
-                  text:
-                      'Nothing saved for offline playback yet. Tap the cloud '
-                      'icon on a video to keep it on this device.',
-                  padding: padding,
+                child: SafeArea(
+                  bottom: false,
+                  child: PageIntro(
+                    eyebrow: 'On this device',
+                    title: 'Saved for offline',
+                    description: offlineVideos.isEmpty
+                        ? 'Keep a video on this device for flights, commutes, '
+                              'or whenever your server is out of reach.'
+                        : '${offlineVideos.length} ${offlineVideos.length == 1 ? 'video' : 'videos'} available without a connection.',
+                  ),
                 ),
-              )
-            else
-              SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final entry = offlineVideos[index];
-                  final videoId = entry['video_id'] as String;
-                  return _DeviceDownloadTile(
-                    entry: entry,
-                    liveProgress: offlineProgress[videoId],
-                    onPlay: () async {
-                      await context.push('/player/$videoId');
-                      if (!mounted) return;
-                      invalidateFeedProviders(ref);
-                    },
-                    onDelete: () => _deleteDeviceDownload(entry),
-                    onRetry: () => _retryDeviceDownload(entry),
-                    onCancel: () => _cancelDeviceDownload(videoId),
-                  );
-                }, childCount: offlineVideos.length),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
+              if (offlineVideos.isEmpty)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyStatePanel(
+                    icon: Icons.download_for_offline_outlined,
+                    eyebrow: 'Ready when you need it',
+                    title: 'Nothing is saved on this device yet',
+                    description:
+                        'Open a downloaded video in a channel and choose '
+                        '“Save for offline.” Server-prepared videos do not use '
+                        'device storage until you ask.',
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(padding, 0, padding, 24),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final entry = offlineVideos[index];
+                      final videoId = entry['video_id'] as String;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Card(
+                          child: _DeviceDownloadTile(
+                            entry: entry,
+                            liveProgress: offlineProgress[videoId],
+                            onPlay: () async {
+                              await context.push('/player/$videoId');
+                              if (!mounted) return;
+                              invalidateFeedProviders(ref);
+                            },
+                            onDelete: () => _deleteDeviceDownload(entry),
+                            onRetry: () => _retryDeviceDownload(entry),
+                            onCancel: () => _cancelDeviceDownload(videoId),
+                          ),
+                        ),
+                      );
+                    }, childCount: offlineVideos.length),
+                  ),
+                ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyNote extends StatelessWidget {
-  final String text;
-  final double padding;
-  const _EmptyNote({required this.text, required this.padding});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: padding, vertical: 8),
-      child: Text(
-        text,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: NullFeedTheme.textMuted),
       ),
     );
   }
@@ -172,8 +177,9 @@ class _Thumbnail extends StatelessWidget {
         child: youtubeVideoId != null && youtubeVideoId!.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl:
-                    'https://img.youtube.com/vi/$youtubeVideoId/mqdefault.jpg',
+                    'https://i.ytimg.com/vi/$youtubeVideoId/hqdefault.jpg',
                 fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
                 errorWidget: (_, __, ___) => placeholder,
               )
             : placeholder,

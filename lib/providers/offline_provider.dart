@@ -1,11 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/active_session_scope.dart';
 import '../services/offline_service.dart';
+import 'session_scope_provider.dart';
 
 /// Reactive list of all offline videos. Call `ref.invalidate(offlineVideosProvider)`
 /// or `refresh()` after downloads complete or videos are removed.
 class OfflineVideosNotifier extends Notifier<List<Map<String, dynamic>>> {
   @override
   List<Map<String, dynamic>> build() {
+    final scope = ref.watch(activeSessionScopeProvider);
+    if (scope == null) return const [];
     final offlineService = ref.watch(offlineServiceProvider);
     // Also marks entries stuck in 'downloading' (e.g. after an app kill)
     // as failed before returning them.
@@ -13,6 +17,10 @@ class OfflineVideosNotifier extends Notifier<List<Map<String, dynamic>>> {
   }
 
   void refresh() {
+    if (ref.read(activeSessionScopeProvider) == null) {
+      state = const [];
+      return;
+    }
     final offlineService = ref.read(offlineServiceProvider);
     state = offlineService.getOfflineVideos();
   }
@@ -36,11 +44,20 @@ final offlineStatusProvider = Provider.family<String?, String>((ref, videoId) {
 
 /// Ephemeral map of video_id -> download progress (0.0-1.0).
 class OfflineProgressNotifier extends Notifier<Map<String, double>> {
-  @override
-  Map<String, double> build() => {};
+  ActiveSessionScope? _scope;
 
-  /// Sets the progress for [videoId]; `null` clears it.
-  void setProgress(String videoId, double? progress) {
+  @override
+  Map<String, double> build() {
+    _scope = ref.watch(activeSessionScopeProvider);
+    return {};
+  }
+
+  /// Sets progress only when [owner] is still the active session. This rejects
+  /// delayed Dio callbacks after a server/profile switch.
+  void setProgress(ActiveSessionScope owner, String videoId, double? progress) {
+    if (_scope != owner || ref.read(activeSessionScopeProvider) != owner) {
+      return;
+    }
     if (progress == null) {
       clear(videoId);
     } else {

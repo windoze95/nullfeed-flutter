@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/channel.dart';
 import '../config/theme.dart';
+import 'cinematic_banner.dart';
 
 class ChannelCard extends StatefulWidget {
   final Channel channel;
@@ -59,44 +60,15 @@ class _ChannelCardState extends State<ChannelCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Banner image
-                    if (widget.channel.bannerUrl != null)
-                      CachedNetworkImage(
-                        imageUrl: widget.channel.bannerUrl!,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) =>
-                            Container(color: NullFeedTheme.cardColor),
-                        placeholder: (_, __) =>
-                            Container(color: NullFeedTheme.cardColor),
-                      )
-                    else
-                      Container(
-                        color: NullFeedTheme.cardColor,
-                        child: Center(
-                          child: Icon(
-                            Icons.subscriptions,
-                            size: 40,
-                            color: NullFeedTheme.primaryColor.withValues(
-                              alpha: 0.3,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    // Gradient overlay
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.85),
-                          ],
-                          stops: const [0.3, 1.0],
-                        ),
-                      ),
+                    // YouTube banners are extremely wide. Here they provide
+                    // ambient color instead of being stretched into the card;
+                    // the sharp avatar below remains the visual anchor.
+                    CinematicBanner(
+                      imageUrl: widget.channel.bannerUrl,
+                      showSharpArtwork: false,
                     ),
+
+                    const Positioned(left: 12, top: 12, child: _ChannelLabel()),
 
                     // Channel info
                     Positioned(
@@ -109,14 +81,17 @@ class _ChannelCardState extends State<ChannelCard> {
                             CircleAvatar(
                               radius: 18,
                               backgroundImage: CachedNetworkImageProvider(
-                                widget.channel.avatarUrl!,
+                                CinematicBanner.highResolutionUrl(
+                                  widget.channel.avatarUrl!,
+                                )!,
                               ),
+                              backgroundColor: NullFeedTheme.cardColor,
                             )
                           else
                             CircleAvatar(
                               radius: 18,
                               backgroundColor: NullFeedTheme.primaryColor
-                                  .withValues(alpha: 0.3),
+                                  .withValues(alpha: 0.16),
                               child: Text(
                                 widget.channel.name.isNotEmpty
                                     ? widget.channel.name[0].toUpperCase()
@@ -136,8 +111,8 @@ class _ChannelCardState extends State<ChannelCard> {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -170,6 +145,33 @@ class _ChannelCardState extends State<ChannelCard> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChannelLabel extends StatelessWidget {
+  const _ChannelLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.44),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Text(
+          'CHANNEL',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
         ),
       ),
     );

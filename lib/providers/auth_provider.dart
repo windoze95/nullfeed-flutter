@@ -6,6 +6,7 @@ import '../models/user.dart';
 import '../services/api_service.dart';
 import '../services/push_service.dart';
 import '../services/storage_service.dart';
+import 'session_scope_provider.dart';
 import 'websocket_provider.dart';
 
 class AuthState {
@@ -61,6 +62,17 @@ class AuthNotifier extends Notifier<AuthState> {
   ApiService get _api => ref.read(apiServiceProvider);
   StorageService get _storage => ref.read(storageServiceProvider);
 
+  void _activateSessionScope(String userId) {
+    final serverUrl = _storage.getServerUrl();
+    if (serverUrl == null || serverUrl.trim().isEmpty) {
+      ref.read(activeSessionScopeProvider.notifier).clear();
+      return;
+    }
+    ref
+        .read(activeSessionScopeProvider.notifier)
+        .activate(serverUrl: serverUrl, userId: userId);
+  }
+
   String _describe(Object error, String fallback) =>
       error is ApiException ? error.message : fallback;
 
@@ -87,6 +99,7 @@ class AuthNotifier extends Notifier<AuthState> {
       // bypass PIN protection).
       final user = await _api.getMe();
       if (_restoreSuperseded(token)) return;
+      _activateSessionScope(user.id);
       state = AuthState(profiles: state.profiles, currentUser: user);
       // Silent: refresh the token but never prompt at cold launch.
       _registerForPush(interactive: false);
@@ -96,6 +109,7 @@ class AuthNotifier extends Notifier<AuthState> {
         // Session is gone server-side: clear it and show the picker.
         await _storage.setSelectedUserId(null);
         await _storage.setSessionToken(null);
+        ref.read(activeSessionScopeProvider.notifier).clear();
         state = const AuthState();
       } else {
         // Network/server error: keep the session and let the UI offer retry.
@@ -135,6 +149,7 @@ class AuthNotifier extends Notifier<AuthState> {
       final result = await _api.selectProfile(userId, pin: pin);
       await _storage.setSelectedUserId(result.user.id);
       await _storage.setSessionToken(result.token);
+      _activateSessionScope(result.user.id);
       state = state.copyWith(currentUser: result.user, isLoading: false);
       _registerForPush(interactive: true);
     } catch (e) {
@@ -194,6 +209,7 @@ class AuthNotifier extends Notifier<AuthState> {
     final result = await _api.selectProfile(user.id, pin: pin);
     await _storage.setSelectedUserId(result.user.id);
     await _storage.setSessionToken(result.token);
+    _activateSessionScope(result.user.id);
     state = state.copyWith(
       profiles: [...state.profiles, result.user],
       currentUser: result.user,
@@ -247,6 +263,7 @@ class AuthNotifier extends Notifier<AuthState> {
           .where((profile) => profile.id != userId)
           .toList();
       if (state.currentUser?.id == userId) {
+        ref.read(activeSessionScopeProvider.notifier).clear();
         ref.read(webSocketServiceProvider).disconnect();
         await _storage.clearSession();
         state = AuthState(profiles: profiles);
@@ -278,6 +295,7 @@ class AuthNotifier extends Notifier<AuthState> {
     if (state.currentUser == null) return false;
     // Reset synchronously first so the router redirects and any concurrent
     // 401 sees the cleared state and bails.
+    ref.read(activeSessionScopeProvider.notifier).clear();
     state = AuthState(profiles: state.profiles);
     ref.read(webSocketServiceProvider).disconnect();
     // Best-effort: drop this device's push registration (the dead token would
@@ -288,6 +306,9 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    // Clear user-domain state before any network round-trip so the signed-out
+    // transition can never render the previous profile's data.
+    ref.read(activeSessionScopeProvider.notifier).clear();
     // Remove this device's push token while the session is still valid.
     await ref.read(pushServiceProvider).unregister();
     try {

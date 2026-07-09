@@ -5,3 +5,6 @@ String cookieExtensionUrl() =>
     'https://github.com/kairi003/Get-cookies.txt-LOCALLY';
 
 void openInNewTab(String url) {}
+
+/// Native clients cannot infer a NullFeed server from an app origin.
+String? currentBrowserOrigin() => null;

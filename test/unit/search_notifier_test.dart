@@ -5,6 +5,7 @@ import 'package:nullfeed/models/channel.dart';
 import 'package:nullfeed/models/video.dart';
 import 'package:nullfeed/models/video_page.dart';
 import 'package:nullfeed/providers/search_provider.dart';
+import 'package:nullfeed/providers/session_scope_provider.dart';
 import 'package:nullfeed/services/api_service.dart';
 
 import '../helpers/test_helpers.dart';
@@ -21,6 +22,9 @@ void main() {
       overrides: [apiServiceProvider.overrideWithValue(api)],
     );
     addTearDown(container.dispose);
+    container
+        .read(activeSessionScopeProvider.notifier)
+        .activate(serverUrl: 'http://test-server:8484', userId: 'u1');
     return container;
   }
 

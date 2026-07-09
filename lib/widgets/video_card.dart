@@ -13,6 +13,7 @@ import 'content_type_badge.dart';
 import 'progress_bar.dart';
 import 'queue_action.dart';
 import 'unplayable_badge.dart';
+import 'adaptive_layout.dart';
 
 class VideoCard extends ConsumerStatefulWidget {
   final Video video;
@@ -32,13 +33,17 @@ class VideoCard extends ConsumerStatefulWidget {
 
 class _VideoCardState extends ConsumerState<VideoCard> {
   bool _isPressed = false;
+  bool _isHovered = false;
 
   String? get _thumbnailUrl {
     if (widget.video.youtubeVideoId.isNotEmpty) {
-      return 'https://img.youtube.com/vi/${widget.video.youtubeVideoId}/mqdefault.jpg';
+      return 'https://i.ytimg.com/vi/${widget.video.youtubeVideoId}/maxresdefault.jpg';
     }
     return null;
   }
+
+  String get _fallbackThumbnailUrl =>
+      'https://i.ytimg.com/vi/${widget.video.youtubeVideoId}/hqdefault.jpg';
 
   /// One merged, human-readable label for the play target — title, channel and
   /// download state — instead of a pile of separate text/icon nodes.
@@ -83,11 +88,14 @@ class _VideoCardState extends ConsumerState<VideoCard> {
 
   @override
   Widget build(BuildContext context) {
-    const cardWidth = AppConstants.videoCardWidth;
+    final availableWidth =
+        MediaQuery.sizeOf(context).width -
+        (AdaptiveLayout.contentPadding(context) * 2);
+    final cardWidth = availableWidth.clamp(250.0, AppConstants.videoCardWidth);
     final offlineStatus = ref.watch(offlineStatusProvider(widget.video.id));
 
     return AnimatedScale(
-      scale: _isPressed ? 0.97 : 1.0,
+      scale: _isPressed ? 0.975 : (_isHovered ? 1.012 : 1.0),
       duration: const Duration(milliseconds: 120),
       curve: Curves.easeOut,
       child: SizedBox(
@@ -111,14 +119,16 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                   onTapDown: (_) => setState(() => _isPressed = true),
                   onTapUp: (_) => setState(() => _isPressed = false),
                   onTapCancel: () => setState(() => _isPressed = false),
-                  borderRadius: BorderRadius.circular(12),
+                  onHover: (value) => setState(() => _isHovered = value),
+                  mouseCursor: SystemMouseCursors.click,
+                  borderRadius: BorderRadius.circular(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // Thumbnail
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(16),
                         child: AspectRatio(
                           aspectRatio: AppConstants.cardAspectRatio,
                           child: Stack(
@@ -128,14 +138,27 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                                 CachedNetworkImage(
                                   imageUrl: _thumbnailUrl!,
                                   fit: BoxFit.cover,
-                                  errorWidget: (_, __, ___) => Container(
-                                    color: NullFeedTheme.cardColor,
-                                    child: const Icon(
-                                      Icons.play_circle_outline,
-                                      color: NullFeedTheme.textMuted,
-                                      size: 40,
-                                    ),
-                                  ),
+                                  memCacheWidth:
+                                      (cardWidth *
+                                              MediaQuery.devicePixelRatioOf(
+                                                context,
+                                              ))
+                                          .round(),
+                                  filterQuality: FilterQuality.high,
+                                  errorWidget: (_, __, ___) =>
+                                      CachedNetworkImage(
+                                        imageUrl: _fallbackThumbnailUrl,
+                                        fit: BoxFit.cover,
+                                        filterQuality: FilterQuality.high,
+                                        errorWidget: (_, __, ___) => Container(
+                                          color: NullFeedTheme.cardColor,
+                                          child: const Icon(
+                                            Icons.play_circle_outline_rounded,
+                                            color: NullFeedTheme.textMuted,
+                                            size: 40,
+                                          ),
+                                        ),
+                                      ),
                                   placeholder: (_, __) =>
                                       Container(color: NullFeedTheme.cardColor),
                                 )
@@ -143,11 +166,37 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                                 Container(
                                   color: NullFeedTheme.cardColor,
                                   child: const Icon(
-                                    Icons.play_circle_outline,
+                                    Icons.play_circle_outline_rounded,
                                     color: NullFeedTheme.textMuted,
                                     size: 40,
                                   ),
                                 ),
+
+                              // A visible play affordance makes the result of
+                              // tapping the artwork unambiguous.
+                              Center(
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 140),
+                                  width: _isHovered ? 48 : 44,
+                                  height: _isHovered ? 48 : 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(
+                                      alpha: _isHovered ? 0.72 : 0.5,
+                                    ),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.white,
+                                    size: 27,
+                                  ),
+                                ),
+                              ),
 
                               // Why this video can't play (age-restricted,
                               // members-only, …) — hidden once a local file
@@ -236,15 +285,16 @@ class _VideoCardState extends ConsumerState<VideoCard> {
 
                       // Title
                       Padding(
-                        padding: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(top: 9),
                         child: Text(
                           widget.video.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: NullFeedTheme.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            height: 1.25,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),

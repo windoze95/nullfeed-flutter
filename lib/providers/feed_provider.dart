@@ -2,18 +2,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/feed.dart';
 import '../services/api_service.dart';
 import '../services/catalog_cache_service.dart';
+import 'session_scope_provider.dart';
 
 final continueWatchingProvider = FutureProvider<List<FeedItem>>((ref) async {
+  if (ref.watch(activeSessionScopeProvider) == null) return const [];
   final api = ref.watch(apiServiceProvider);
   return api.getContinueWatching();
 });
 
 final newEpisodesProvider = FutureProvider<List<FeedItem>>((ref) async {
+  if (ref.watch(activeSessionScopeProvider) == null) return const [];
   final api = ref.watch(apiServiceProvider);
   return api.getNewEpisodes();
 });
 
 final recentlyAddedProvider = FutureProvider<List<FeedItem>>((ref) async {
+  if (ref.watch(activeSessionScopeProvider) == null) return const [];
   final api = ref.watch(apiServiceProvider);
   return api.getRecentlyAdded();
 });
@@ -38,8 +42,15 @@ void invalidateFeedProviders(WidgetRef ref) {
 /// writes the result through to the cache. A connection error falls back to the
 /// cached feed instead of surfacing; a real server error still surfaces.
 class HomeFeedNotifier extends Notifier<AsyncValue<HomeFeed>> {
+  int _requestId = 0;
+
   @override
   AsyncValue<HomeFeed> build() {
+    final scope = ref.watch(activeSessionScopeProvider);
+    // Invalidate any request started for the previous server/profile before it
+    // can complete into this notifier after the dependency rebuild.
+    _requestId++;
+    if (scope == null) return const AsyncValue.loading();
     final cached = _cache.readHomeFeed();
     // Deferred so the refresh runs after build() returns and `state` exists.
     Future.microtask(refresh);
@@ -55,16 +66,31 @@ class HomeFeedNotifier extends Notifier<AsyncValue<HomeFeed>> {
     // The build-time refresh is deferred, and screens invalidate this provider
     // while a fetch is in flight; bail if this element was disposed meanwhile.
     if (!ref.mounted) return;
+    final scope = ref.read(activeSessionScopeProvider);
+    if (scope == null) {
+      state = const AsyncValue.loading();
+      return;
+    }
+    final requestId = ++_requestId;
     final api = _api;
     final cache = _cache;
     // Keep cached content on screen while refetching; only spin when empty.
     if (!state.hasValue) state = const AsyncValue.loading();
     try {
       final feed = await api.getHomeFeed();
+      if (!ref.mounted ||
+          requestId != _requestId ||
+          ref.read(activeSessionScopeProvider) != scope) {
+        return;
+      }
       await cache.writeHomeFeed(feed);
-      if (ref.mounted) state = AsyncValue.data(feed);
+      if (ref.mounted &&
+          requestId == _requestId &&
+          ref.read(activeSessionScopeProvider) == scope) {
+        state = AsyncValue.data(feed);
+      }
     } catch (e, st) {
-      if (ref.mounted) {
+      if (ref.mounted && requestId == _requestId) {
         state = resolveCatalogRefreshError(e, st, state, cache.readHomeFeed());
       }
     }

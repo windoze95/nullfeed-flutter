@@ -40,7 +40,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
 
   String? get _thumbnailUrl {
     if (widget.video.youtubeVideoId.isNotEmpty) {
-      return 'https://img.youtube.com/vi/${widget.video.youtubeVideoId}/mqdefault.jpg';
+      return 'https://i.ytimg.com/vi/${widget.video.youtubeVideoId}/hqdefault.jpg';
     }
     return null;
   }
@@ -142,6 +142,11 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
   Widget build(BuildContext context) {
     final isTappable = widget.onTap != null;
     final offlineStatus = ref.watch(offlineStatusProvider(widget.video.id));
+    final compact =
+        MediaQuery.sizeOf(context).width < 480 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.35;
+    final thumbnailWidth = compact ? 112.0 : 160.0;
+    final thumbnailHeight = thumbnailWidth * 9 / 16;
 
     return Opacity(
       opacity: isTappable || widget.video.isPlayable ? 1.0 : 0.7,
@@ -180,8 +185,8 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(6),
                           child: SizedBox(
-                            width: 160,
-                            height: 90,
+                            width: thumbnailWidth,
+                            height: thumbnailHeight,
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
@@ -189,6 +194,7 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                                   CachedNetworkImage(
                                     imageUrl: _thumbnailUrl!,
                                     fit: BoxFit.cover,
+                                    filterQuality: FilterQuality.high,
                                     errorWidget: (_, __, ___) => Container(
                                       color: NullFeedTheme.cardColor,
                                       child: const Icon(

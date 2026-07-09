@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:nullfeed/models/video.dart';
 import 'package:nullfeed/models/video_page.dart';
 import 'package:nullfeed/providers/queue_provider.dart';
+import 'package:nullfeed/providers/session_scope_provider.dart';
 import 'package:nullfeed/services/api_service.dart';
 
 import '../helpers/test_helpers.dart';
@@ -25,6 +26,12 @@ void main() {
   Future<void> settle() =>
       Future<void>.delayed(const Duration(milliseconds: 20));
 
+  void activate(ProviderContainer container) {
+    container
+        .read(activeSessionScopeProvider.notifier)
+        .activate(serverUrl: 'http://test-server:8484', userId: 'u1');
+  }
+
   /// Builds a container whose queue has finished its initial load with
   /// [initial] as the first page.
   Future<ProviderContainer> seededContainer(
@@ -43,6 +50,7 @@ void main() {
       overrides: [apiServiceProvider.overrideWithValue(api)],
     );
     addTearDown(container.dispose);
+    activate(container);
     container.read(queueProvider);
     await settle();
     return container;
@@ -63,6 +71,7 @@ void main() {
           overrides: [apiServiceProvider.overrideWithValue(api)],
         );
         addTearDown(container.dispose);
+        activate(container);
 
         container.read(queueProvider);
         await settle();
@@ -94,6 +103,7 @@ void main() {
         overrides: [apiServiceProvider.overrideWithValue(api)],
       );
       addTearDown(container.dispose);
+      activate(container);
 
       container.read(queueProvider);
       await settle();
@@ -268,7 +278,7 @@ void main() {
       expect(container.read(queueProvider.notifier).nextAfter('v2'), isNull);
     });
 
-    test('returns the head when the finished video is not queued', () async {
+    test('does not enter Watch Later from an unrelated video', () async {
       final container = await seededContainer([
         video('v1'),
         video('v2'),
@@ -276,7 +286,7 @@ void main() {
 
       expect(
         container.read(queueProvider.notifier).nextAfter('outsider'),
-        'v1',
+        isNull,
       );
     });
 
