@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import '../config/theme.dart';
 
 /// Skip-back / skip-forward control for the player overlay: a trio of
-/// chevrons over a seconds label, replacing the stock replay_10 / forward_10
-/// icons.
+/// chevrons, replacing the stock replay_10 / forward_10 icons.
 ///
 /// A tap fires [onTap] (one fixed skip) and plays a single brightness sweep
 /// across the chevrons in the skip direction. Press-and-hold fires
 /// [onHoldStart]; while the hold is active the caller passes the accumulated
-/// amount (e.g. "+45s") as [holdLabel], which replaces the seconds label and
-/// keeps the sweep animating on repeat until [onHoldEnd].
+/// amount (e.g. "+45s") as [holdLabel], which appears while seeking and keeps
+/// the sweep animating on repeat until [onHoldEnd].
 class SkipControl extends StatefulWidget {
   /// Points the chevrons (and the sweep) right when true, left when false.
   final bool forward;
 
-  /// The fixed skip size a tap performs, shown as the idle label ("10s").
+  /// The fixed skip size a tap performs, used in the accessibility label and
+  /// tooltip while the visual control remains chevrons-only at rest.
   final int seconds;
 
   /// Accumulated hold-to-seek amount while a hold is active; null when idle.
@@ -109,9 +109,8 @@ class _SkipControlState extends State<SkipControl>
               color: _holding ? Colors.white12 : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
             ),
-            // The chevrons + label are decorative; the outer Semantics node
-            // carries the full description, so keep the raw "10s" text from
-            // being appended to it.
+            // The chevrons and optional hold label are decorative; the outer
+            // Semantics node carries the full control description.
             child: ExcludeSemantics(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -127,18 +126,18 @@ class _SkipControlState extends State<SkipControl>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.holdLabel ?? '${widget.seconds}s',
-                    style: TextStyle(
-                      color: _holding
-                          ? NullFeedTheme.primaryColor
-                          : Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  if (widget.holdLabel case final holdLabel?) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      holdLabel,
+                      style: const TextStyle(
+                        color: NullFeedTheme.primaryColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

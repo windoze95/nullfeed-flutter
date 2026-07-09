@@ -66,11 +66,11 @@ void main() {
     expect(ends, 1);
   });
 
-  testWidgets('idle label shows the skip size; holdLabel replaces it', (
+  testWidgets('idle control hides the skip size; holdLabel appears on hold', (
     tester,
   ) async {
     await pumpControl(tester);
-    expect(find.text('10s'), findsOneWidget);
+    expect(find.text('10s'), findsNothing);
 
     await pumpControl(tester, holdLabel: '+45s');
     expect(find.text('+45s'), findsOneWidget);
@@ -79,7 +79,7 @@ void main() {
     // Back to idle (hold released) — the repeating sweep must stop so the
     // test's ticker assertions (and the widget) settle.
     await pumpControl(tester);
-    expect(find.text('10s'), findsOneWidget);
+    expect(find.text('10s'), findsNothing);
     await tester.pumpAndSettle();
   });
 
