@@ -7,6 +7,10 @@ import 'package:better_player_plus/better_player_plus.dart';
 // stable.
 // ignore: implementation_imports
 import 'package:better_player_plus/src/enum/aspect_enum.dart';
+// The platform interface isn't re-exported either; needed for the
+// zero-duration seek fallback in [seekTo]. Same version-pin rationale.
+// ignore: implementation_imports
+import 'package:better_player_plus/src/video_player/video_player_platform_interface.dart';
 import 'package:flutter/widgets.dart';
 
 import 'nf_playback_controller.dart';
@@ -160,7 +164,26 @@ class BetterPlayerNfController extends NfPlaybackController {
   Future<void> pause() => _controller.pause();
 
   @override
-  Future<void> seekTo(Duration position) => _controller.seekTo(position);
+  Future<void> seekTo(Duration position) async {
+    final vpc = _controller.videoPlayerController;
+    if (vpc == null) return;
+    // better_player's Dart layer clamps every seek to `value.duration` — and
+    // some streams misreport their duration as zero/unknown at initialization
+    // (see the `finished` note in [_onEvent]). Through that clamp, EVERY seek
+    // on such a stream becomes a seek to 0: the video "restarts from the
+    // top" on any skip or scrub. When duration is unusable, seek the platform
+    // directly instead — AVPlayer knows the real duration and clamps sanely.
+    final duration = vpc.value.duration;
+    if (duration == null || duration <= Duration.zero) {
+      final clamped = position < Duration.zero ? Duration.zero : position;
+      // textureId is marked visibleForTesting upstream, but it is the only
+      // handle the platform channel accepts; the dependency is version-pinned.
+      // ignore: invalid_use_of_visible_for_testing_member
+      await VideoPlayerPlatform.instance.seekTo(vpc.textureId, clamped);
+      return;
+    }
+    return _controller.seekTo(position);
+  }
 
   @override
   Future<void> setSpeed(double speed) => _controller.setSpeed(speed);
