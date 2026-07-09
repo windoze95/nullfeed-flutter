@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nullfeed/widgets/progress_bar.dart';
 
@@ -15,6 +16,7 @@ void main() {
     List<double>? previews,
     void Function()? onStart,
     void Function()? onEnd,
+    double progress = 0.25,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -23,7 +25,7 @@ void main() {
             child: SizedBox(
               width: barWidth,
               child: NullFeedProgressBar(
-                progress: 0.25,
+                progress: progress,
                 onSeek: seeks.add,
                 onSeekPreview: previews?.add,
                 onSeekStart: onStart,
@@ -35,6 +37,23 @@ void main() {
       ),
     );
   }
+
+  testWidgets('fill reflects progress updates', (tester) async {
+    final seeks = <double>[];
+    await pumpBar(tester, seeks: seeks, progress: 0.25);
+
+    LinearProgressIndicator indicator() => tester.widget(
+      find.descendant(
+        of: find.byType(NullFeedProgressBar),
+        matching: find.byType(LinearProgressIndicator),
+      ),
+    );
+
+    expect(indicator().value, 0.25);
+
+    await pumpBar(tester, seeks: seeks, progress: 0.7);
+    expect(indicator().value, 0.7);
+  });
 
   testWidgets('drag previews continuously but seeks once, on release', (
     tester,
@@ -81,7 +100,14 @@ void main() {
 
   testWidgets('tap seeks once to the tapped fraction', (tester) async {
     final seeks = <double>[];
-    await pumpBar(tester, seeks: seeks);
+    var started = 0;
+    var ended = 0;
+    await pumpBar(
+      tester,
+      seeks: seeks,
+      onStart: () => started++,
+      onEnd: () => ended++,
+    );
 
     final barFinder = find.byType(NullFeedProgressBar);
     final topLeft = tester.getTopLeft(barFinder);
@@ -92,6 +118,94 @@ void main() {
 
     expect(seeks, hasLength(1));
     expect(seeks.single, closeTo(0.75, 0.05));
+    expect(started, 1);
+    expect(ended, 1);
+  });
+
+  testWidgets('seek interaction starts on pointer down before recognition', (
+    tester,
+  ) async {
+    final seeks = <double>[];
+    var started = 0;
+    var ended = 0;
+    await pumpBar(
+      tester,
+      seeks: seeks,
+      onStart: () => started++,
+      onEnd: () => ended++,
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(NullFeedProgressBar)),
+    );
+    expect(started, 1);
+    expect(ended, 0);
+
+    // A slow press stays active until the actual pointer release.
+    await tester.pump(const Duration(seconds: 4));
+    expect(started, 1);
+    expect(ended, 0);
+
+    await gesture.up();
+    await tester.pump();
+    expect(ended, 1);
+  });
+
+  testWidgets('full touch-sized height can start taps and drags', (
+    tester,
+  ) async {
+    final seeks = <double>[];
+    await pumpBar(tester, seeks: seeks);
+
+    final barFinder = find.byType(NullFeedProgressBar);
+    final rect = tester.getRect(barFinder);
+    expect(rect.height, greaterThanOrEqualTo(44));
+
+    // Both points are well outside the painted 4dp track.
+    await tester.tapAt(Offset(rect.left + barWidth * 0.6, rect.top + 2));
+    await tester.pump();
+    expect(seeks.single, closeTo(0.6, 0.05));
+
+    seeks.clear();
+    final gesture = await tester.startGesture(
+      Offset(rect.left + barWidth * 0.2, rect.bottom - 2),
+      kind: PointerDeviceKind.touch,
+    );
+    await gesture.moveBy(const Offset(80, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(seeks.single, closeTo(0.6, 0.08));
+  });
+
+  testWidgets('mouse can drag from outside the painted track', (tester) async {
+    final seeks = <double>[];
+    await pumpBar(tester, seeks: seeks);
+
+    final rect = tester.getRect(find.byType(NullFeedProgressBar));
+    final gesture = await tester.startGesture(
+      Offset(rect.left + barWidth * 0.25, rect.top + 2),
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(seeks.single, closeTo(0.75, 0.08));
+  });
+
+  testWidgets('passive bar keeps its configured compact height', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: NullFeedProgressBar(progress: 0.5, height: 4)),
+      ),
+    );
+
+    expect(tester.getSize(find.byType(NullFeedProgressBar)).height, 4);
   });
 
   testWidgets('system-cancelled drag ends the scrub with a single commit', (

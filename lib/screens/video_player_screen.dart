@@ -73,8 +73,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// playhead lands past the segment. See [sponsorSkipDecision].
   double? _skipSeekInFlightEnd;
 
-  /// True while the viewer is actively dragging the seek bar. Suspends sponsor
-  /// auto-skip so a manual scrub through a sponsor segment isn't fought by an
+  /// True while the viewer has a pointer down on the seek bar. Suspends sponsor
+  /// auto-skip so a tap or scrub through a sponsor segment isn't fought by an
   /// auto-seek — competing seeks on a still-buffering source wedge the player.
   bool _isScrubbing = false;
 
@@ -906,9 +906,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     });
   }
 
-  /// The viewer grabbed the seek bar — suspend sponsor auto-skip until they
-  /// let go so a manual scrub through a sponsor isn't fought by an auto-seek.
-  void _onScrubStart() => _isScrubbing = true;
+  /// The viewer touched the seek bar — pin the controls immediately and suspend
+  /// sponsor auto-skip until release. Waiting for drag recognition here leaves
+  /// a slow touch vulnerable to the normal controls auto-hide timer.
+  void _onScrubStart() {
+    _isScrubbing = true;
+    // Keep the controls pinned for the whole gesture. A careful scrub can
+    // easily outlast the normal three-second auto-hide timeout.
+    _hideControlsTimer?.cancel();
+  }
 
   /// Live drag position from the seek bar; no seek is issued — this only
   /// drives the previewed timestamp in the overlay until release.
@@ -925,6 +931,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     if (_scrubPreviewFraction != null) {
       setState(() => _scrubPreviewFraction = null);
     }
+    _scheduleHideControls();
   }
 
   /// When the video plays through to the end, advance into the queue: consume
@@ -1001,7 +1008,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     // the same), which would auto-advance to the next queued video instead of
     // just nudging the playhead — so a skip-forward near the end must stay a
     // moment short of the end. Natural end-of-playback still advances.
-    final duration = player.duration;
+    final duration = effectivePlaybackDuration(
+      player.duration,
+      Duration(seconds: _video?.durationSeconds ?? 0),
+    );
     if (duration > Duration.zero) {
       final maxTarget = duration - const Duration(seconds: 1);
       if (clamped > maxTarget) clamped = maxTarget;
@@ -1314,6 +1324,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
               if (_showControls && _isInitialized)
                 _ControlsOverlay(
                   player: _player!,
+                  fallbackDuration: Duration(
+                    seconds: video?.durationSeconds ?? 0,
+                  ),
                   onBack: _navigateBack,
                   onSeekRelative: _seekRelative,
                   onSeekAbsolute: _requestSeek,
@@ -1443,6 +1456,27 @@ double holdSeekRateAt(double heldSeconds) {
       : rate;
 }
 
+/// Duration used by the seek timeline. Native media duration is authoritative
+/// when available; progressive iOS sources can temporarily report zero even
+/// while position advances, so backend metadata is the fallback for that case.
+@visibleForTesting
+Duration effectivePlaybackDuration(
+  Duration nativeDuration,
+  Duration metadataDuration,
+) {
+  if (nativeDuration > Duration.zero) return nativeDuration;
+  if (metadataDuration > Duration.zero) return metadataDuration;
+  return Duration.zero;
+}
+
+/// Converts a playhead position into the clamped fill fraction shown by the
+/// seek timeline.
+@visibleForTesting
+double playbackProgressFraction(Duration position, Duration duration) {
+  if (duration <= Duration.zero) return 0;
+  return (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+}
+
 /// Formats a playback timestamp as M:SS, or H:MM:SS once it crosses an hour.
 String _formatTimestamp(Duration d) {
   final hours = d.inHours;
@@ -1512,6 +1546,7 @@ class _ResumeBanner extends StatelessWidget {
 
 class _ControlsOverlay extends StatelessWidget {
   final NfPlaybackController player;
+  final Duration fallbackDuration;
   final VoidCallback onBack;
   final void Function(int) onSeekRelative;
 
@@ -1557,6 +1592,7 @@ class _ControlsOverlay extends StatelessWidget {
 
   const _ControlsOverlay({
     required this.player,
+    required this.fallbackDuration,
     required this.onBack,
     required this.onSeekRelative,
     required this.onSeekAbsolute,
@@ -1708,7 +1744,10 @@ class _ControlsOverlay extends StatelessWidget {
               child: ListenableBuilder(
                 listenable: player,
                 builder: (_, __) {
-                  final duration = player.duration;
+                  final duration = effectivePlaybackDuration(
+                    player.duration,
+                    fallbackDuration,
+                  );
                   // While scrubbing, the position label previews the drag
                   // target (highlighted) instead of the still-playing head —
                   // the seek itself only fires on release.
@@ -1723,10 +1762,10 @@ class _ControlsOverlay extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       NullFeedProgressBar(
-                        progress: duration.inMilliseconds > 0
-                            ? player.position.inMilliseconds /
-                                  duration.inMilliseconds
-                            : 0,
+                        progress: playbackProgressFraction(
+                          player.position,
+                          duration,
+                        ),
                         height: 4,
                         semanticLabel: 'Video position',
                         semanticValueBuilder: (fraction) {
