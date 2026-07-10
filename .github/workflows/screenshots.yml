@@ -4,6 +4,8 @@ name: Store Screenshots
 # the nullfeed-demo server on an iOS simulator, saving true-framebuffer PNGs.
 on:
   workflow_dispatch:
+  push:
+    branches: [chore/store-screenshots]
 
 env:
   FLUTTER_VERSION: "3.41.4"
