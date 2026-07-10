@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-/// NullFeed's visual language: quiet, cinematic surfaces with a bright
-/// "signal" accent. The high-contrast accent is reserved for actions and live
-/// state so users can immediately tell what is interactive.
+/// NullFeed's visual language: quiet, cinematic surfaces with a purple
+/// brand accent for actions and interactive state, plus a bright lime
+/// "ready" signal reserved for success states (downloaded, connected).
 class NullFeedTheme {
   NullFeedTheme._();
 
-  static const Color primaryColor = Color(0xFFB8FF5C);
-  static const Color accentColor = Color(0xFF9A8CFF);
+  static const Color primaryColor = Color(0xFF7C4DFF);
+  static const Color accentColor = Color(0xFFB388FF);
   static const Color backgroundColor = Color(0xFF07090D);
   static const Color surfaceColor = Color(0xFF0D1118);
   static const Color cardColor = Color(0xFF131923);
@@ -19,7 +19,7 @@ class NullFeedTheme {
   static const Color textMuted = Color(0xFF8C98A8);
   static const Color dividerColor = Color(0xFF222C39);
   static const Color errorColor = Color(0xFFFF7185);
-  static const Color successColor = Color(0xFF5CE6A8);
+  static const Color successColor = Color(0xFFB8FF5C);
   static const Color warningColor = Color(0xFFFFCC66);
   static const Color progressBackground = Color(0xFF303B49);
   static const Color progressForeground = primaryColor;
@@ -37,7 +37,7 @@ class NullFeedTheme {
       secondary: accentColor,
       surface: surfaceColor,
       error: errorColor,
-      onPrimary: Color(0xFF101508),
+      onPrimary: Colors.white,
       onSecondary: Colors.white,
       onSurface: textPrimary,
       onError: Color(0xFF210006),
@@ -112,7 +112,7 @@ class NullFeedTheme {
       ),
       navigationRailTheme: const NavigationRailThemeData(
         backgroundColor: Colors.transparent,
-        indicatorColor: Color(0x29B8FF5C),
+        indicatorColor: Color(0x297C4DFF),
         selectedIconTheme: IconThemeData(color: primaryColor),
         unselectedIconTheme: IconThemeData(color: textMuted),
         selectedLabelTextStyle: TextStyle(

@@ -39,7 +39,7 @@ class _AmbientGlowPainter extends CustomPainter {
     final primaryPaint = Paint()
       ..shader =
           const RadialGradient(
-            colors: [Color(0x18B8FF5C), Color(0x00B8FF5C)],
+            colors: [Color(0x187C4DFF), Color(0x007C4DFF)],
           ).createShader(
             Rect.fromCircle(
               center: Offset(size.width * 0.84, size.height * 0.06),
@@ -55,7 +55,7 @@ class _AmbientGlowPainter extends CustomPainter {
     final accentPaint = Paint()
       ..shader =
           const RadialGradient(
-            colors: [Color(0x149A8CFF), Color(0x009A8CFF)],
+            colors: [Color(0x10B8FF5C), Color(0x00B8FF5C)],
           ).createShader(
             Rect.fromCircle(
               center: Offset(size.width * 0.08, size.height * 0.72),
@@ -101,7 +101,7 @@ class NullFeedMark extends StatelessWidget {
               borderRadius: BorderRadius.circular(compact ? 12 : 14),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x2EB8FF5C),
+                  color: Color(0x2E7C4DFF),
                   blurRadius: 24,
                   spreadRadius: -5,
                 ),
@@ -110,7 +110,7 @@ class NullFeedMark extends StatelessWidget {
             child: Icon(
               Icons.graphic_eq_rounded,
               size: compact ? 22 : 27,
-              color: const Color(0xFF101508),
+              color: Colors.white,
             ),
           ),
           if (showWordmark) ...[
@@ -221,9 +221,7 @@ class QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = emphasized
-        ? const Color(0xFF101508)
-        : NullFeedTheme.textPrimary;
+    final foreground = emphasized ? Colors.white : NullFeedTheme.textPrimary;
     return Semantics(
       button: true,
       label: label,
