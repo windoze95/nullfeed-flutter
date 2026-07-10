@@ -69,8 +69,11 @@ jobs:
         run: |
           mkdir -p shots
           UDID=${{ steps.sim.outputs.udid }} OUTDIR=$PWD/shots PORT=8765 nohup python3 tool/screenshots/capture_server.py > /tmp/capture-server.log 2>&1 &
-          sleep 1
-          curl -sf -o /dev/null http://localhost:8765/capture/smoke
+          for i in $(seq 1 15); do
+            curl -sf -o /dev/null http://localhost:8765/capture/smoke && break
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:8765/capture/smoke || { cat /tmp/capture-server.log; exit 1; }
           rm -f shots/smoke.png
 
       - name: Prebuild app
