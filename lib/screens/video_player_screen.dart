@@ -427,11 +427,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     }
 
     // Resume from the saved spot unless it's been fully watched (then start
-    // over). A rewind gives the viewer a moment of context.
+    // over). A rewind gives the viewer a moment of context. The native duration
+    // can still be unknown for progressive streams even after initialization,
+    // so an unknown duration must not collapse a valid resume target to zero.
     if (resumeSeconds > 0 && !fullyWatched) {
-      final resumePos = (resumeSeconds - AppConstants.skipBackwardSeconds)
-          .clamp(0, player.duration.inSeconds);
-      await player.seekTo(Duration(seconds: resumePos));
+      await player.seekTo(
+        resumePlaybackPosition(resumeSeconds, player.duration),
+      );
       _resumeFromSeconds = resumeSeconds;
     }
 
@@ -495,17 +497,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
     // Resume from where the viewer left off (rewound a little so they can
     // re-orient). A fresh or fully-watched video starts from the top. Clamp to
-    // the player's ACTUAL duration, not the server's durationSeconds (which can
-    // be stale/wrong and would otherwise drag the resume back toward the
-    // start while the banner still shows the saved position). Mirrors the
-    // offline path.
+    // the player's ACTUAL duration when it is known, not the server's
+    // durationSeconds (which can be stale/wrong and would otherwise drag the
+    // resume back toward the start while the banner still shows the saved
+    // position). Progressive streams can temporarily report zero duration; in
+    // that case leave the upper clamp to the native player. Mirrors the offline
+    // path.
     if (video.canResume) {
-      final resumePos =
-          (video.watchPositionSeconds - AppConstants.skipBackwardSeconds).clamp(
-            0,
-            player.duration.inSeconds,
-          );
-      await player.seekTo(Duration(seconds: resumePos));
+      await player.seekTo(
+        resumePlaybackPosition(video.watchPositionSeconds, player.duration),
+      );
       _resumeFromSeconds = video.watchPositionSeconds;
     }
 
@@ -1454,6 +1455,26 @@ double holdSeekRateAt(double heldSeconds) {
   return rate > AppConstants.holdSeekMaxRate
       ? AppConstants.holdSeekMaxRate
       : rate;
+}
+
+/// Playback target for a saved watch position.
+///
+/// A short rewind provides context. A usable native duration remains the
+/// authoritative upper bound, but progressive iOS streams can report zero while
+/// AVPlayer already knows how to seek them. Treating that zero as an upper bound
+/// would turn every resume into a seek to the beginning.
+@visibleForTesting
+Duration resumePlaybackPosition(
+  int watchPositionSeconds,
+  Duration nativeDuration,
+) {
+  final rewoundSeconds =
+      watchPositionSeconds - AppConstants.skipBackwardSeconds;
+  final target = Duration(seconds: rewoundSeconds > 0 ? rewoundSeconds : 0);
+  if (nativeDuration > Duration.zero && target > nativeDuration) {
+    return nativeDuration;
+  }
+  return target;
 }
 
 /// Duration used by the seek timeline. Native media duration is authoritative
