@@ -64,9 +64,10 @@ abstract class NfPlaybackController extends ChangeNotifier {
   /// Leave Picture-in-Picture. No-op where unsupported.
   Future<void> exitPip();
 
-  /// Load the source and complete once the video is initialized (duration
-  /// known). Throws if the source fails to load; callers bound this with a
-  /// timeout and dispose on failure.
+  /// Load the source and complete once the video is initialized. Some
+  /// progressive sources still report an unknown/zero duration at this point;
+  /// callers must not treat that as a real upper bound. Throws if the source
+  /// fails to load; callers bound this with a timeout and dispose on failure.
   Future<void> initialize();
 
   Future<void> play();
