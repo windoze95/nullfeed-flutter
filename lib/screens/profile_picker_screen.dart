@@ -224,7 +224,6 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
     final serverUrl = ref.read(settingsProvider).serverUrl;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NullFeedTheme.surfaceColor,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -278,7 +277,6 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        backgroundColor: NullFeedTheme.surfaceColor,
         builder: (sheetContext) =>
             _EditProfileSheet(profile: profile, managementToken: token),
       );
@@ -292,7 +290,6 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
         await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            backgroundColor: NullFeedTheme.cardColor,
             title: const Text('Delete profile?'),
             content: Text(
               'Delete ${profile.displayName}? Their subscriptions and watch '
@@ -306,6 +303,7 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: NullFeedTheme.errorColor,
+                  foregroundColor: Theme.of(dialogContext).colorScheme.onError,
                 ),
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 child: const Text('Delete'),

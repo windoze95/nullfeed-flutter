@@ -7,6 +7,7 @@ import '../models/youtube_import.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/app_ui.dart';
 import '../widgets/profile_avatar.dart';
 
 /// Full-screen profile creation flow.
@@ -304,7 +305,10 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: NullFeedTheme.textSecondary,
+                            ),
                           )
                         : const Text('Lookup'),
                   ),
@@ -322,6 +326,13 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
               ],
               if (_resolvedProfile != null) ...[
                 const SizedBox(height: 16),
+                // The flow's earned green moment: the lookup succeeded.
+                const AppStatusPill(
+                  label: 'PROFILE FOUND',
+                  icon: Icons.check_circle_rounded,
+                  color: NullFeedTheme.successColor,
+                ),
+                const SizedBox(height: 10),
                 _IdentityPreviewCard(
                   profile: _resolvedProfile!,
                   onClear: _creating ? null : _clearImport,
@@ -380,7 +391,10 @@ class _AddProfileScreenState extends ConsumerState<AddProfileScreen> {
                           const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: NullFeedTheme.textSecondary,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Text(_busyStatus ?? 'Creating profile…'),

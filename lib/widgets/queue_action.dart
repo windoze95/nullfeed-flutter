@@ -91,7 +91,6 @@ Future<void> showVideoActionsSheet(
 }) {
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: NullFeedTheme.cardColor,
     builder: (sheetContext) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,

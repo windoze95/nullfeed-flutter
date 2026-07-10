@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
 
-/// NullFeed's visual language: quiet, cinematic surfaces with a purple
-/// brand accent for actions and interactive state, plus a bright lime
-/// "ready" signal reserved for success states (downloaded, connected).
+/// NullFeed's visual language: quiet, cinematic surfaces with a violet
+/// brand base and one loud lime signal.
+///
+/// The violet has two jobs: [primaryColor] paints fills, borders, and
+/// interactive surfaces; [accentColor] is violet-as-text — the only violet
+/// legible as small text on the dark surfaces (primary tops out at ~4.1:1).
+/// [successColor] is intentionally loud and reserved for signal moments —
+/// resume/ready cues, watch progress, offline pins, connection confirmed —
+/// never ambiance, and never states that appear on every row of a list
+/// (on the downloads screen every row is saved, so "Saved" stays muted).
+/// Over imagery or video, use pure Colors.white on a solid dark scrim or
+/// black chip; textPrimary is for app surfaces.
 class NullFeedTheme {
   NullFeedTheme._();
 
@@ -21,8 +30,17 @@ class NullFeedTheme {
   static const Color errorColor = Color(0xFFFF7185);
   static const Color successColor = Color(0xFFB8FF5C);
   static const Color warningColor = Color(0xFFFFCC66);
-  static const Color progressBackground = Color(0xFF303B49);
+  static const Color infoColor = Color(0xFF4DB6AC);
+  static const Color violetDeepColor = Color(0xFF171526);
+  static const Color progressBackground = cardHoverColor;
   static const Color progressForeground = primaryColor;
+
+  /// Passive "how far you are" bars (thumbnail slivers, resume bars) — the
+  /// lime signal. The interactive player scrubber keeps [progressForeground].
+  static const Color watchProgressColor = successColor;
+
+  /// Shared fill for selected navigation/chip states.
+  static final Color selectionFill = primaryColor.withValues(alpha: 0.16);
 
   static const LinearGradient ambientGradient = LinearGradient(
     begin: Alignment.topLeft,
@@ -38,7 +56,7 @@ class NullFeedTheme {
       surface: surfaceColor,
       error: errorColor,
       onPrimary: Colors.white,
-      onSecondary: Colors.white,
+      onSecondary: Color(0xFF1B0E33),
       onSurface: textPrimary,
       onError: Color(0xFF210006),
       outline: borderColor,
@@ -85,7 +103,7 @@ class NullFeedTheme {
         height: 68,
         backgroundColor: surfaceColor.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
-        indicatorColor: primaryColor.withValues(alpha: 0.16),
+        indicatorColor: selectionFill,
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
@@ -110,16 +128,16 @@ class NullFeedTheme {
           );
         }),
       ),
-      navigationRailTheme: const NavigationRailThemeData(
+      navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.transparent,
-        indicatorColor: Color(0x297C4DFF),
-        selectedIconTheme: IconThemeData(color: primaryColor),
-        unselectedIconTheme: IconThemeData(color: textMuted),
-        selectedLabelTextStyle: TextStyle(
+        indicatorColor: selectionFill,
+        selectedIconTheme: const IconThemeData(color: primaryColor),
+        unselectedIconTheme: const IconThemeData(color: textMuted),
+        selectedLabelTextStyle: const TextStyle(
           color: textPrimary,
           fontWeight: FontWeight.w700,
         ),
-        unselectedLabelTextStyle: TextStyle(color: textMuted),
+        unselectedLabelTextStyle: const TextStyle(color: textMuted),
       ),
       textTheme: base.textTheme.copyWith(
         displaySmall: const TextStyle(
@@ -232,7 +250,7 @@ class NullFeedTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: primaryColor,
+          foregroundColor: accentColor,
           minimumSize: const Size(44, 44),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -253,7 +271,7 @@ class NullFeedTheme {
         filled: true,
         fillColor: cardColor,
         labelStyle: const TextStyle(color: textSecondary),
-        floatingLabelStyle: const TextStyle(color: primaryColor),
+        floatingLabelStyle: const TextStyle(color: accentColor),
         prefixIconColor: textMuted,
         suffixIconColor: textMuted,
         border: OutlineInputBorder(
@@ -280,7 +298,7 @@ class NullFeedTheme {
       ),
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: cardColor,
-        selectedColor: primaryColor.withValues(alpha: 0.16),
+        selectedColor: selectionFill,
         disabledColor: cardColor,
         side: const BorderSide(color: borderColor),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -292,19 +310,19 @@ class NullFeedTheme {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       ),
       dialogTheme: const DialogThemeData(
-        backgroundColor: surfaceColor,
+        backgroundColor: cardColor,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: borderColor),
           borderRadius: BorderRadius.all(Radius.circular(24)),
         ),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: surfaceColor,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: cardColor,
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: surfaceColor,
-        modalBarrierColor: Color(0xB307090D),
-        shape: RoundedRectangleBorder(
+        modalBackgroundColor: cardColor,
+        modalBarrierColor: backgroundColor.withValues(alpha: 0.7),
+        shape: const RoundedRectangleBorder(
           side: BorderSide(color: borderColor),
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
@@ -315,7 +333,7 @@ class NullFeedTheme {
           color: textPrimary,
           fontWeight: FontWeight.w600,
         ),
-        actionTextColor: primaryColor,
+        actionTextColor: accentColor,
         shape: RoundedRectangleBorder(
           side: const BorderSide(color: borderColor),
           borderRadius: BorderRadius.circular(14),

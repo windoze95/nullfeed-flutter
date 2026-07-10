@@ -125,7 +125,7 @@ class _BannerFallback extends StatelessWidget {
           colors: [
             NullFeedTheme.elevatedSurfaceColor,
             NullFeedTheme.cardColor,
-            Color(0xFF171526),
+            NullFeedTheme.violetDeepColor,
           ],
         ),
       ),

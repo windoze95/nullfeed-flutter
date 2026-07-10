@@ -280,6 +280,7 @@ class _VideoCardState extends ConsumerState<VideoCard> {
                           child: NullFeedProgressBar(
                             progress: widget.video.watchProgress,
                             height: 3,
+                            foregroundColor: NullFeedTheme.watchProgressColor,
                           ),
                         ),
 

@@ -502,8 +502,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         _draftReachable!
                             ? Icons.check_circle_rounded
                             : Icons.error_rounded,
+                        // The "Connection confirmed" pill is this event's one
+                        // green; the suffix check is a quiet echo.
                         color: _draftReachable!
-                            ? NullFeedTheme.successColor
+                            ? NullFeedTheme.textSecondary
                             : NullFeedTheme.errorColor,
                       ),
               ),
@@ -532,7 +534,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ? const SizedBox(
                           width: 17,
                           height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: NullFeedTheme.textSecondary,
+                          ),
                         )
                       : const Icon(Icons.swap_horiz_rounded, size: 18),
                   label: Text(
@@ -895,7 +900,10 @@ class _YoutubeCookiesSectionState
                       ? const SizedBox(
                           height: 16,
                           width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: NullFeedTheme.textSecondary,
+                          ),
                         )
                       : const Text('Save'),
                 ),

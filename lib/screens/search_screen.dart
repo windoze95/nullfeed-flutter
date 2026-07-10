@@ -293,7 +293,7 @@ class _ChannelChip extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: NullFeedTheme.primaryColor,
+                    color: NullFeedTheme.accentColor,
                   ),
                 ),
               ),

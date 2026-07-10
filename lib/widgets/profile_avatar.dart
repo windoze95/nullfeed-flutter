@@ -49,7 +49,7 @@ class ProfileAvatar extends StatelessWidget {
       height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: NullFeedTheme.primaryColor.withValues(alpha: 0.3),
+        color: NullFeedTheme.primaryColor.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(borderRadius ?? size / 2),
       ),
       child: url == null
@@ -78,7 +78,7 @@ class _FallbackInitial extends StatelessWidget {
         style: TextStyle(
           fontSize: size * 0.4,
           fontWeight: FontWeight.bold,
-          color: NullFeedTheme.primaryColor,
+          color: NullFeedTheme.accentColor,
         ),
       ),
     );

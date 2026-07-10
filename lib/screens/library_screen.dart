@@ -131,7 +131,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: NullFeedTheme.cardColor,
         title: Text('Unsubscribe from ${channel.name}?'),
         content: const Text(
           'This removes the channel from this profile\'s Library. New uploads '
@@ -376,7 +375,6 @@ class _SubscribeDialogState extends ConsumerState<_SubscribeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: NullFeedTheme.cardColor,
       title: const Text('Add a YouTube channel'),
       content: Column(
         mainAxisSize: MainAxisSize.min,

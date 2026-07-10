@@ -7,10 +7,10 @@ import '../models/video.dart';
 /// icon carries the color coding.
 Color unplayableReasonColor(UnplayableReason reason) => switch (reason) {
   UnplayableReason.ageRestricted => NullFeedTheme.errorColor,
-  UnplayableReason.membersOnly => const Color(0xFFFFB74D),
-  UnplayableReason.premium => NullFeedTheme.primaryColor,
-  UnplayableReason.geoBlocked => const Color(0xFF64B5F6),
-  UnplayableReason.upcoming => const Color(0xFF4DB6AC),
+  UnplayableReason.membersOnly => NullFeedTheme.warningColor,
+  UnplayableReason.premium => NullFeedTheme.accentColor,
+  UnplayableReason.geoBlocked => NullFeedTheme.infoColor,
+  UnplayableReason.upcoming => NullFeedTheme.infoColor,
   UnplayableReason.private ||
   UnplayableReason.removed ||
   UnplayableReason.drm ||

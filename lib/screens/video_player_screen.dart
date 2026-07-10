@@ -1232,7 +1232,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                       children: [
                         const Icon(
                           Icons.error_outline,
-                          color: Colors.red,
+                          color: NullFeedTheme.errorColor,
                           size: 48,
                         ),
                         const SizedBox(height: 16),
@@ -1304,13 +1304,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black54,
+                          color: Colors.black.withValues(alpha: 0.87),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
                           '360p',
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1516,17 +1516,33 @@ class _ResumeBanner extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.history, color: Colors.white70, size: 18),
+            // The resume signal — the player's one lime moment.
+            const Icon(
+              Icons.history,
+              color: NullFeedTheme.successColor,
+              size: 18,
+            ),
             const SizedBox(width: 8),
-            Text(
-              'Resuming at ${_formatTimestamp(position)}',
+            Text.rich(
+              TextSpan(
+                text: 'Resuming at ',
+                children: [
+                  TextSpan(
+                    text: _formatTimestamp(position),
+                    style: const TextStyle(
+                      color: NullFeedTheme.successColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
               style: const TextStyle(color: Colors.white, fontSize: 14),
             ),
             const SizedBox(width: 8),
             TextButton(
               onPressed: onRestart,
               style: TextButton.styleFrom(
-                foregroundColor: NullFeedTheme.primaryColor,
+                foregroundColor: NullFeedTheme.accentColor,
                 minimumSize: const Size(0, 44),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
@@ -1616,14 +1632,16 @@ class _ControlsOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      // The middle stops dim too: the center play/skip controls are white and
+      // must survive a bright frame (sky, snow) — never leave them unscrimmed.
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
             Colors.black54,
-            Colors.transparent,
-            Colors.transparent,
+            Colors.black45,
+            Colors.black45,
             Colors.black54,
           ],
           stops: [0.0, 0.3, 0.7, 1.0],
@@ -1797,15 +1815,18 @@ class _ControlsOverlay extends StatelessWidget {
                             _formatTimestamp(position),
                             style: TextStyle(
                               color: preview != null
-                                  ? NullFeedTheme.primaryColor
-                                  : Colors.white70,
+                                  ? NullFeedTheme.accentColor
+                                  : Colors.white,
+                              fontWeight: preview != null
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
                               fontSize: 12,
                             ),
                           ),
                           Text(
                             _formatTimestamp(duration),
                             style: const TextStyle(
-                              color: Colors.white70,
+                              color: Colors.white,
                               fontSize: 12,
                             ),
                           ),
