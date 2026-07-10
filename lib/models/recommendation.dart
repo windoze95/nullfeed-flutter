@@ -10,7 +10,10 @@ abstract class Recommendation with _$Recommendation {
     @JsonKey(name: 'channel_name') required String channelName,
     @JsonKey(name: 'channel_id') String? channelId,
     @JsonKey(name: 'youtube_channel_id') String? youtubeChannelId,
-    required String reasoning,
+    // The backend serves this as nullable `reason` (schemas/feed.py
+    // RecommendationOut); requiring a `reasoning` key made every discover
+    // response fail to decode.
+    @JsonKey(name: 'reason') @Default('') String reasoning,
     @JsonKey(name: 'avatar_url') String? avatarUrl,
     @JsonKey(name: 'banner_url') String? bannerUrl,
     @Default(false) bool dismissed,
