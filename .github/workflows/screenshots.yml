@@ -79,6 +79,7 @@ jobs:
       - name: Prebuild app
         run: |
           flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
           flutter build ios --simulator --debug
 
       - name: Run screenshot driver
