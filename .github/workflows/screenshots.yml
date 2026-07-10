@@ -88,6 +88,7 @@ jobs:
       - name: Pre-grant notifications permission
         run: |
           brew tap wix/brew
+          brew trust wix/brew || true
           brew install applesimutils
           xcrun simctl install ${{ steps.sim.outputs.udid }} build/ios/iphonesimulator/Runner.app
           applesimutils --byId ${{ steps.sim.outputs.udid }} --bundle codes.julian.nullfeed --setPermissions notifications=YES
