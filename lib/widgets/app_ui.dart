@@ -38,8 +38,11 @@ class _AmbientGlowPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final primaryPaint = Paint()
       ..shader =
-          const RadialGradient(
-            colors: [Color(0x187C4DFF), Color(0x007C4DFF)],
+          RadialGradient(
+            colors: [
+              NullFeedTheme.primaryColor.withValues(alpha: 0.09),
+              NullFeedTheme.primaryColor.withValues(alpha: 0),
+            ],
           ).createShader(
             Rect.fromCircle(
               center: Offset(size.width * 0.84, size.height * 0.06),
@@ -54,8 +57,11 @@ class _AmbientGlowPainter extends CustomPainter {
 
     final accentPaint = Paint()
       ..shader =
-          const RadialGradient(
-            colors: [Color(0x10B8FF5C), Color(0x00B8FF5C)],
+          RadialGradient(
+            colors: [
+              NullFeedTheme.accentColor.withValues(alpha: 0.06),
+              NullFeedTheme.accentColor.withValues(alpha: 0),
+            ],
           ).createShader(
             Rect.fromCircle(
               center: Offset(size.width * 0.08, size.height * 0.72),
@@ -169,7 +175,7 @@ class PageIntro extends StatelessWidget {
                     Text(
                       eyebrow.toUpperCase(),
                       style: const TextStyle(
-                        color: NullFeedTheme.primaryColor,
+                        color: NullFeedTheme.accentColor,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.4,
@@ -326,7 +332,7 @@ class EmptyStatePanel extends StatelessWidget {
                 Text(
                   eyebrow!.toUpperCase(),
                   style: const TextStyle(
-                    color: NullFeedTheme.primaryColor,
+                    color: NullFeedTheme.accentColor,
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.3,
@@ -400,7 +406,7 @@ class _OnboardingStep extends StatelessWidget {
           child: Text(
             '$number',
             style: const TextStyle(
-              color: NullFeedTheme.primaryColor,
+              color: NullFeedTheme.accentColor,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -423,21 +429,30 @@ class AppStatusPill extends StatelessWidget {
     super.key,
     required this.label,
     this.icon,
-    this.color = NullFeedTheme.primaryColor,
+    this.color = NullFeedTheme.accentColor,
+    this.onImage = false,
   });
 
   final String label;
   final IconData? icon;
   final Color color;
 
+  /// Alpha-tinted fills disappear over arbitrary imagery. When the pill sits
+  /// on a thumbnail or artwork, this switches to an opaque dark backing.
+  final bool onImage;
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: onImage
+            ? NullFeedTheme.backgroundColor
+            : color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
+        border: Border.all(
+          color: color.withValues(alpha: onImage ? 0.45 : 0.24),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

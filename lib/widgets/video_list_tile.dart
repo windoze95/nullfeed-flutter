@@ -269,6 +269,8 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                                     child: NullFeedProgressBar(
                                       progress: widget.video.watchProgress,
                                       height: 3,
+                                      foregroundColor:
+                                          NullFeedTheme.watchProgressColor,
                                     ),
                                   ),
                               ],
@@ -306,10 +308,13 @@ class _VideoListTileState extends ConsumerState<VideoListTile> {
                                     ),
                                   if (widget.video.isWatched) ...[
                                     const SizedBox(width: 8),
+                                    // Watched is inert metadata — muted, so the
+                                    // lime offline pin stays the row's only
+                                    // signal.
                                     const Icon(
                                       Icons.check_circle,
                                       size: 14,
-                                      color: NullFeedTheme.successColor,
+                                      color: NullFeedTheme.textMuted,
                                     ),
                                   ],
                                 ],

@@ -301,7 +301,7 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                       child: AppStatusPill(
                         label: 'FOR YOU',
                         icon: Icons.auto_awesome_rounded,
-                        color: NullFeedTheme.accentColor,
+                        onImage: true,
                       ),
                     ),
                   ],
@@ -378,7 +378,7 @@ class _RecommendationAvatar extends StatelessWidget {
       width: 54,
       height: 54,
       decoration: BoxDecoration(
-        color: NullFeedTheme.elevatedSurfaceColor,
+        color: NullFeedTheme.primaryColor.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(17),
         border: Border.all(color: NullFeedTheme.surfaceColor, width: 3),
         image: url == null
@@ -394,7 +394,7 @@ class _RecommendationAvatar extends StatelessWidget {
           ? Text(
               rec.channelName.isEmpty ? '?' : rec.channelName[0].toUpperCase(),
               style: const TextStyle(
-                color: NullFeedTheme.primaryColor,
+                color: NullFeedTheme.accentColor,
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
               ),

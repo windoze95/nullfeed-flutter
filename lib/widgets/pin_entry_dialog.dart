@@ -82,7 +82,6 @@ class _PinEntryDialogState extends State<PinEntryDialog>
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: NullFeedTheme.cardColor,
       title: Text(widget.title),
       content: Column(
         mainAxisSize: MainAxisSize.min,

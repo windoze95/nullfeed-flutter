@@ -183,7 +183,10 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
               SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: NullFeedTheme.textSecondary,
+                ),
               ),
               SizedBox(width: 10),
               Text('Updating…'),
@@ -206,7 +209,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
             style: OutlinedButton.styleFrom(
               foregroundColor: NullFeedTheme.errorColor,
               side: BorderSide(
-                color: NullFeedTheme.errorColor.withValues(alpha: 0.5),
+                color: NullFeedTheme.errorColor.withValues(alpha: 0.7),
               ),
             ),
             child: content,
@@ -354,7 +357,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                                   style: const TextStyle(
                                     fontSize: 28,
                                     fontWeight: FontWeight.bold,
-                                    color: NullFeedTheme.primaryColor,
+                                    color: NullFeedTheme.accentColor,
                                   ),
                                 ),
                               ),
@@ -380,6 +383,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                                       ).textTheme.bodyMedium,
                                     ),
                                   const SizedBox(height: 8),
+                                  // Membership is persistent state, not a
+                                  // signal moment — no lime, and "not in
+                                  // library" is neutral, not a warning.
                                   AppStatusPill(
                                     label: channel.isSubscribed
                                         ? 'IN YOUR LIBRARY'
@@ -388,8 +394,8 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                                         ? Icons.check_circle_rounded
                                         : Icons.add_circle_outline_rounded,
                                     color: channel.isSubscribed
-                                        ? NullFeedTheme.successColor
-                                        : NullFeedTheme.warningColor,
+                                        ? NullFeedTheme.textSecondary
+                                        : NullFeedTheme.textMuted,
                                   ),
                                 ],
                               ),
@@ -416,7 +422,15 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                                   );
                                   invalidateFeedProviders(ref);
                                 },
-                                icon: const Icon(Icons.play_arrow, size: 24),
+                                // A lime icon marks the resume signal; "Play
+                                // latest" stays plain violet.
+                                icon: Icon(
+                                  Icons.play_arrow,
+                                  size: 24,
+                                  color: target.label == 'Resume'
+                                      ? NullFeedTheme.successColor
+                                      : null,
+                                ),
                                 label: Text(target.label),
                               ),
                             );
@@ -592,7 +606,6 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
 
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NullFeedTheme.cardColor,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) => SafeArea(
           child: Column(
@@ -661,7 +674,6 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   void _showVideoMenu(Video video) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NullFeedTheme.cardColor,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

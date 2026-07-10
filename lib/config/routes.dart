@@ -400,9 +400,7 @@ class _SidebarDestination extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? NullFeedTheme.primaryColor.withValues(alpha: 0.13)
-          : Colors.transparent,
+      color: selected ? NullFeedTheme.selectionFill : Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

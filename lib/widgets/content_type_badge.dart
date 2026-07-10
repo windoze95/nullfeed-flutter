@@ -6,12 +6,12 @@ import '../models/video.dart';
 /// background so it reads like the other thumbnail badges; the icon carries the
 /// color. Reuses the unplayable-badge colors where types overlap.
 Color contentTypeColor(ContentType type) => switch (type) {
-  ContentType.short => NullFeedTheme.primaryColor,
+  ContentType.short => NullFeedTheme.accentColor,
   ContentType.live => NullFeedTheme.errorColor,
-  ContentType.premiere => const Color(0xFF4DB6AC),
+  ContentType.premiere => NullFeedTheme.infoColor,
   ContentType.ageRestricted => NullFeedTheme.errorColor,
-  ContentType.membersOnly => const Color(0xFFFFB74D),
-  ContentType.premium => NullFeedTheme.primaryColor,
+  ContentType.membersOnly => NullFeedTheme.warningColor,
+  ContentType.premium => NullFeedTheme.accentColor,
   ContentType.regular || ContentType.unknown => NullFeedTheme.textMuted,
 };
 

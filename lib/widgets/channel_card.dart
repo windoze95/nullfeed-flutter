@@ -91,13 +91,13 @@ class _ChannelCardState extends State<ChannelCard> {
                             CircleAvatar(
                               radius: 18,
                               backgroundColor: NullFeedTheme.primaryColor
-                                  .withValues(alpha: 0.16),
+                                  .withValues(alpha: 0.2),
                               child: Text(
                                 widget.channel.name.isNotEmpty
                                     ? widget.channel.name[0].toUpperCase()
                                     : '?',
                                 style: const TextStyle(
-                                  color: NullFeedTheme.primaryColor,
+                                  color: NullFeedTheme.accentColor,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),

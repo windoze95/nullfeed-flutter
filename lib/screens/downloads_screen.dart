@@ -32,7 +32,6 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: NullFeedTheme.cardColor,
         title: const Text('Delete from this device?'),
         content: Text(
           title.isEmpty

@@ -128,9 +128,11 @@ void main() {
         .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
         .toList();
     expect(checkboxes.every((tile) => !(tile.value ?? false)), isTrue);
+    await tester.ensureVisible(find.text('Channel One'));
     await tester.tap(find.text('Channel One'));
     await tester.pumpAndSettle();
     expect(find.text('1 of 2 selected'), findsOneWidget);
+    await tester.ensureVisible(find.text('Channel Two'));
     await tester.tap(find.text('Channel Two'));
     await tester.pumpAndSettle();
     expect(find.text('2 of 2 selected'), findsOneWidget);

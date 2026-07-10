@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../config/theme.dart';
 
 /// Skip-back / skip-forward control for the player overlay: a trio of
 /// chevrons, replacing the stock replay_10 / forward_10 icons.
@@ -128,12 +127,14 @@ class _SkipControlState extends State<SkipControl>
                   ),
                   if (widget.holdLabel case final holdLabel?) ...[
                     const SizedBox(height: 4),
+                    // White like the chevrons — violet can't hold 4.5:1 over
+                    // arbitrary video, even through the overlay scrim.
                     Text(
                       holdLabel,
                       style: const TextStyle(
-                        color: NullFeedTheme.primaryColor,
+                        color: Colors.white,
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),

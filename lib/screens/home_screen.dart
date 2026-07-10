@@ -304,6 +304,8 @@ class _SpotlightCard extends StatelessWidget {
                           ? Icons.history_rounded
                           : Icons.auto_awesome_rounded,
                       label: canResume ? 'CONTINUE WATCHING' : 'READY TO WATCH',
+                      color: NullFeedTheme.successColor,
+                      onImage: true,
                     ),
                     const SizedBox(height: 13),
                     Text(
@@ -330,6 +332,7 @@ class _SpotlightCard extends StatelessWidget {
                         child: NullFeedProgressBar(
                           progress: item.video.watchProgress,
                           height: 4,
+                          foregroundColor: NullFeedTheme.watchProgressColor,
                         ),
                       ),
                     ],
@@ -381,7 +384,7 @@ class _SpotlightFallback extends StatelessWidget {
           colors: [
             NullFeedTheme.elevatedSurfaceColor,
             NullFeedTheme.cardColor,
-            Color(0xFF19162B),
+            NullFeedTheme.violetDeepColor,
           ],
         ),
       ),
@@ -596,7 +599,6 @@ class _RecommendationRailCard extends StatelessWidget {
               const AppStatusPill(
                 label: 'WHY IT FITS',
                 icon: Icons.auto_awesome_rounded,
-                color: NullFeedTheme.accentColor,
               ),
               const SizedBox(height: 9),
               Expanded(
