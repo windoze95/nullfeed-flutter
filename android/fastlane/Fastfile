@@ -25,17 +25,28 @@ platform :android do
 
   desc "Upload the release AAB to Play"
   lane :beta do
-    upload_to_play_store(
-      package_name: PACKAGE_NAME,
-      track: ENV["PLAY_TRACK"] || "internal",
-      release_status: ENV["PLAY_RELEASE_STATUS"] || "draft",
-      aab: "../build/app/outputs/bundle/release/app-release.aab",
-      json_key: ENV["PLAY_JSON_KEY_PATH"],
-      skip_upload_metadata: true,
-      skip_upload_changelogs: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-    )
+    begin
+      upload_to_play_store(
+        package_name: PACKAGE_NAME,
+        track: ENV["PLAY_TRACK"] || "internal",
+        release_status: ENV["PLAY_RELEASE_STATUS"] || "draft",
+        aab: "../build/app/outputs/bundle/release/app-release.aab",
+        json_key: ENV["PLAY_JSON_KEY_PATH"],
+        skip_upload_metadata: true,
+        skip_upload_changelogs: true,
+        skip_upload_images: true,
+        skip_upload_screenshots: true,
+      )
+    rescue => e
+      # Bootstrap: the publisher API cannot create apps. Until NullFeed is
+      # created once in the Play Console UI, uploads are a graceful no-op
+      # (the signed AAB is still attached as a workflow artifact).
+      if e.message.to_s =~ /[Pp]ackage not found|applicationNotFound/
+        UI.important("codes.julian.nullfeed doesn't exist in the Play Console yet - create it once in the Console UI, then re-run. Skipping upload.")
+      else
+        raise
+      end
+    end
   end
 
   desc "Push the Play listing (copy + graphics), no binary"
