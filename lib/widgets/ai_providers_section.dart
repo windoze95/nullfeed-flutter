@@ -1,17 +1,13 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/theme.dart';
 import '../models/ai_providers.dart';
 import '../services/api_service.dart';
-import '../utils/browser_link.dart';
 
 /// Admin panel for the Discover AI providers: API keys (Anthropic / Gemini /
-/// OpenAI), the embed + rank provider selection, and the ChatGPT sign-in that
-/// backs the subscription-based rank provider. Values are stored server-side;
-/// keys are write-only (never read back).
+/// OpenAI) and the embed + rank provider selection. Values are stored
+/// server-side; keys are write-only (never read back).
 class AiProvidersSection extends ConsumerStatefulWidget {
   const AiProvidersSection({super.key});
 
@@ -25,7 +21,6 @@ class _AiProvidersSectionState extends ConsumerState<AiProvidersSection> {
     'anthropic': 'Anthropic',
     'gemini': 'Google Gemini',
     'openai': 'OpenAI',
-    'chatgpt': 'ChatGPT sign-in',
   };
 
   AiProvidersStatus? _status;
@@ -93,11 +88,7 @@ class _AiProvidersSectionState extends ConsumerState<AiProvidersSection> {
           ),
           const SizedBox(height: 12),
         ],
-        _ChatGptSignInCard(
-          available: status.availability['chatgpt'] ?? false,
-          onChanged: _load,
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 4),
         _SelectionCard(
           role: 'embed',
           title: 'Embedding provider',
@@ -112,8 +103,8 @@ class _AiProvidersSectionState extends ConsumerState<AiProvidersSection> {
           role: 'rank',
           title: 'Ranking provider',
           description:
-              'Picks and explains the final recommendations. Can use any key '
-              'above, or the ChatGPT sign-in.',
+              'Picks and explains the final recommendations. Uses any of '
+              'the keys above.',
           selection: status.rank,
           onSaved: _apply,
         ),
@@ -404,285 +395,6 @@ class _SelectionCardState extends ConsumerState<_SelectionCard> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ChatGptSignInCard extends ConsumerStatefulWidget {
-  const _ChatGptSignInCard({required this.available, required this.onChanged});
-
-  final bool available;
-
-  /// Called after a state change (connected / signed out) so the parent can
-  /// refresh availability + effective-provider labels.
-  final Future<void> Function() onChanged;
-
-  @override
-  ConsumerState<_ChatGptSignInCard> createState() => _ChatGptSignInCardState();
-}
-
-class _ChatGptSignInCardState extends ConsumerState<_ChatGptSignInCard> {
-  ChatgptLoginStatus? _status;
-  Timer? _poller;
-  String? _userCode;
-  String? _verificationUrl;
-  bool _busy = false;
-  String? _error;
-
-  ApiService get _api => ref.read(apiServiceProvider);
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _poller?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    try {
-      final s = await _api.getChatgptLogin();
-      if (!mounted) return;
-      setState(() {
-        _status = s;
-        if (s.pending) {
-          _userCode = s.userCode;
-          _verificationUrl = s.verificationUrl;
-          _startPolling();
-        }
-      });
-    } catch (_) {
-      /* leave as unknown */
-    }
-  }
-
-  Future<void> _connect() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final r = await _api.startChatgptLogin();
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _userCode = r.userCode;
-        _verificationUrl = r.verificationUrl;
-      });
-      if (r.verificationUrl != null) openInNewTab(r.verificationUrl!);
-      _startPolling();
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          _error = e.message;
-        });
-      }
-    }
-  }
-
-  void _startPolling() {
-    _poller?.cancel();
-    _poller = Timer.periodic(const Duration(seconds: 3), (_) => _poll());
-  }
-
-  Future<void> _poll() async {
-    ChatgptPollResult r;
-    try {
-      r = await _api.pollChatgptLogin();
-    } catch (_) {
-      return; // transient; keep polling
-    }
-    if (!mounted) return;
-    switch (r.status) {
-      case 'connected':
-        _poller?.cancel();
-        setState(() {
-          _userCode = null;
-          _verificationUrl = null;
-        });
-        await _load();
-        await widget.onChanged();
-        break;
-      case 'pending':
-        setState(() {
-          _userCode = r.userCode ?? _userCode;
-          _verificationUrl = r.verificationUrl ?? _verificationUrl;
-        });
-        break;
-      case 'expired':
-      case 'error':
-      case 'idle':
-        _poller?.cancel();
-        setState(() {
-          _userCode = null;
-          _verificationUrl = null;
-          _error = r.detail;
-        });
-        break;
-    }
-  }
-
-  Future<void> _disconnect() async {
-    setState(() => _busy = true);
-    try {
-      await _api.clearChatgptLogin();
-      _poller?.cancel();
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _userCode = null;
-        _verificationUrl = null;
-      });
-      await _load();
-      await widget.onChanged();
-    } catch (_) {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final status = _status;
-    final connected = status?.connected == true;
-    final signingIn = _userCode != null;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  connected
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.circle_outlined,
-                  size: 18,
-                  color: connected
-                      ? NullFeedTheme.accentColor
-                      : NullFeedTheme.textMuted,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'ChatGPT subscription',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const Spacer(),
-                if (status?.needsReauth == true)
-                  const Text(
-                    'reconnect',
-                    style: TextStyle(
-                      color: NullFeedTheme.errorColor,
-                      fontSize: 12,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Rank Discover on a ChatGPT Plus/Pro plan instead of an OpenAI '
-              'key. Enable device authorization in ChatGPT → Settings → '
-              'Security first. Shares your plan\'s Codex usage limits.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: NullFeedTheme.textMuted),
-            ),
-            if (signingIn) ...[const SizedBox(height: 12), _codePanel()],
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                style: const TextStyle(
-                  color: NullFeedTheme.errorColor,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                if (!connected && !signingIn)
-                  FilledButton(
-                    onPressed: _busy ? null : _connect,
-                    child: _busy
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: NullFeedTheme.textSecondary,
-                            ),
-                          )
-                        : const Text('Connect'),
-                  ),
-                if (signingIn)
-                  const Text(
-                    'Waiting for approval…',
-                    style: TextStyle(
-                      color: NullFeedTheme.textMuted,
-                      fontSize: 13,
-                    ),
-                  ),
-                if (connected)
-                  TextButton(
-                    onPressed: _busy ? null : _disconnect,
-                    child: const Text(
-                      'Sign out',
-                      style: TextStyle(color: NullFeedTheme.errorColor),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _codePanel() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: NullFeedTheme.elevatedSurfaceColor,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Enter this code at the ChatGPT page:'),
-          const SizedBox(height: 6),
-          SelectableText(
-            _userCode ?? '',
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 22,
-              letterSpacing: 2,
-              color: NullFeedTheme.textPrimary,
-            ),
-          ),
-          if (_verificationUrl != null) ...[
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => openInNewTab(_verificationUrl!),
-                icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                label: const Text('Open the sign-in page'),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }

@@ -47,9 +47,6 @@ class AppConstants {
       '$apiBase/settings/ai-providers/keys/$provider';
   static String settingsAiSelection(String role) =>
       '$apiBase/settings/ai-providers/selection/$role';
-  static const String settingsChatgptLogin = '$apiBase/settings/chatgpt-login';
-  static const String settingsChatgptLoginPoll =
-      '$apiBase/settings/chatgpt-login/poll';
   static const String channels = '$apiBase/channels';
   static const String channelSubscribe = '$apiBase/channels/subscribe';
   static const String channelSubscribeBulk = '$apiBase/channels/subscribe-bulk';
