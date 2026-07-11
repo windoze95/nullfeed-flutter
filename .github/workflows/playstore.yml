@@ -128,7 +128,7 @@ jobs:
         env:
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           PLAY_TRACK: ${{ inputs.track || 'internal' }}
-          PLAY_RELEASE_STATUS: ${{ inputs.release_status || 'draft' }}
+          PLAY_RELEASE_STATUS: ${{ inputs.release_status || 'completed' }}
         run: |
           printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/play-service-account.json"
           export PLAY_JSON_KEY_PATH="$RUNNER_TEMP/play-service-account.json"
