@@ -143,4 +143,49 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'a 404 when clearing the recommendation is treated as already-cleared',
+    (tester) async {
+      when(() => api.getRecommendations()).thenAnswer(
+        (_) async => [
+          makeRecommendation(
+            id: 'r1',
+            channelName: 'Veritasium',
+            youtubeChannelId: 'UC-x',
+          ),
+        ],
+      );
+      when(() => api.getChannels()).thenAnswer((_) async => const <Channel>[]);
+      when(
+        () => api.subscribeToChannel(
+          any(),
+          trackingMode: any(named: 'trackingMode'),
+        ),
+      ).thenAnswer((_) async {});
+      // The recommendation is already gone server-side (e.g. cleared by the
+      // staleness sweep) — dismiss 404s.
+      when(() => api.dismissRecommendation(any())).thenThrow(
+        const ApiException(
+          message: 'Recommendation not found',
+          statusCode: 404,
+        ),
+      );
+
+      await pumpHome(tester);
+      await revealRecommendations(tester);
+      await tester.ensureVisible(find.text('Subscribe'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Subscribe'));
+      await tester.pumpAndSettle();
+
+      // The card is cleared and NO "could not be cleared" error is shown.
+      expect(find.text('Subscribed to Veritasium'), findsOneWidget);
+      expect(find.text('Recommended for you'), findsNothing);
+      expect(find.textContaining('could not be cleared'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    },
+  );
 }

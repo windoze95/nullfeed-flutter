@@ -51,14 +51,25 @@ class DiscoverNotifier extends Notifier<AsyncValue<List<Recommendation>>> {
     }
     try {
       await _api.dismissRecommendation(id);
-    } catch (_) {
-      if (ref.mounted &&
-          requestId == _requestId &&
-          ref.read(activeSessionScopeProvider) == scope &&
-          previous != null) {
-        state = AsyncValue.data(previous);
-      }
+    } on ApiException catch (e) {
+      // The recommendation is already gone (e.g. cleared by the staleness
+      // sweep, or by subscribing to it). The card's job is done — keep it
+      // removed rather than resurrecting it and alarming the user.
+      if (e.statusCode == 404) return;
+      _rollback(requestId, scope, previous);
       rethrow;
+    } catch (_) {
+      _rollback(requestId, scope, previous);
+      rethrow;
+    }
+  }
+
+  void _rollback(int requestId, Object? scope, List<Recommendation>? previous) {
+    if (ref.mounted &&
+        requestId == _requestId &&
+        ref.read(activeSessionScopeProvider) == scope &&
+        previous != null) {
+      state = AsyncValue.data(previous);
     }
   }
 
