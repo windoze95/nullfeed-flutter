@@ -10,8 +10,10 @@ on:
       - ".github/workflows/storelisting.yml"
   workflow_dispatch:
 
+# Shares the deploy workflow's group: Play allows one active edit per package,
+# and a same-push deploy run committing its edit deletes the listing's edit.
 concurrency:
-  group: storelisting
+  group: playstore-deploy
   cancel-in-progress: false
 
 jobs:
