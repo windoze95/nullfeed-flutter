@@ -13,7 +13,6 @@ AiProvidersStatus _status({
   Map<String, dynamic>? geminiKey,
   String rankProvider = '',
   Map<String, dynamic>? rankEffective,
-  bool chatgpt = false,
 }) => AiProvidersStatus.fromJson({
   'keys': {
     'anthropic': {'configured': false, 'source': null, 'last4': null},
@@ -32,13 +31,12 @@ AiProvidersStatus _status({
     'model': '',
     'source': rankProvider.isEmpty ? 'env' : 'runtime',
     'effective': rankEffective,
-    'options': ['anthropic', 'gemini', 'openai', 'chatgpt'],
+    'options': ['anthropic', 'gemini', 'openai'],
   },
   'availability': {
     'anthropic': false,
     'gemini': geminiKey?['configured'] == true,
     'openai': false,
-    'chatgpt': chatgpt,
   },
 });
 
@@ -47,9 +45,6 @@ void main() {
 
   setUp(() {
     api = MockApiService();
-    when(() => api.getChatgptLogin()).thenAnswer(
-      (_) async => ChatgptLoginStatus.fromJson({'connected': false}),
-    );
   });
 
   Future<void> pump(WidgetTester tester) async {

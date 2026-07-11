@@ -82,7 +82,7 @@ class AiProvidersStatus {
   final AiSelection embed;
   final AiSelection rank;
 
-  /// Per-provider "usable right now", including `chatgpt` (sign-in based).
+  /// Per-provider "usable right now" (anthropic / gemini / openai).
   final Map<String, bool> availability;
 
   factory AiProvidersStatus.fromJson(Map<String, dynamic> json) {
@@ -103,56 +103,4 @@ class AiProvidersStatus {
       availability: {for (final e in rawAvail.entries) e.key: e.value == true},
     );
   }
-}
-
-/// Status of the ChatGPT (Codex OAuth) sign-in.
-class ChatgptLoginStatus {
-  const ChatgptLoginStatus({
-    required this.connected,
-    required this.needsReauth,
-    required this.pending,
-    required this.userCode,
-    required this.verificationUrl,
-  });
-
-  final bool connected;
-  final bool needsReauth;
-  final bool pending;
-
-  /// Device code to enter (only while a sign-in is pending).
-  final String? userCode;
-  final String? verificationUrl;
-
-  factory ChatgptLoginStatus.fromJson(Map<String, dynamic> json) =>
-      ChatgptLoginStatus(
-        connected: json['connected'] == true,
-        needsReauth: json['needs_reauth'] == true,
-        pending: json['pending'] == true,
-        userCode: json['user_code'] as String?,
-        verificationUrl: json['verification_url'] as String?,
-      );
-}
-
-/// One poll of the device sign-in.
-class ChatgptPollResult {
-  const ChatgptPollResult({
-    required this.status,
-    required this.detail,
-    required this.userCode,
-    required this.verificationUrl,
-  });
-
-  /// idle | pending | connected | expired | error
-  final String status;
-  final String? detail;
-  final String? userCode;
-  final String? verificationUrl;
-
-  factory ChatgptPollResult.fromJson(Map<String, dynamic> json) =>
-      ChatgptPollResult(
-        status: (json['status'] as String?) ?? 'idle',
-        detail: json['detail'] as String?,
-        userCode: json['user_code'] as String?,
-        verificationUrl: json['verification_url'] as String?,
-      );
 }

@@ -531,36 +531,6 @@ class ApiService {
     return AiProvidersStatus.fromJson(r.data as Map<String, dynamic>);
   });
 
-  // --- ChatGPT (Codex OAuth) sign-in (admin) --------------------------------
-
-  Future<ChatgptLoginStatus> getChatgptLogin() => _guard(() async {
-    final r = await _dio.get('$_baseUrl${AppConstants.settingsChatgptLogin}');
-    return ChatgptLoginStatus.fromJson(r.data as Map<String, dynamic>);
-  });
-
-  Future<ChatgptPollResult> startChatgptLogin() => _guard(() async {
-    final r = await _dio.post('$_baseUrl${AppConstants.settingsChatgptLogin}');
-    // The start response has the same shape as a pending poll.
-    final data = r.data as Map<String, dynamic>;
-    return ChatgptPollResult(
-      status: 'pending',
-      detail: null,
-      userCode: data['user_code'] as String?,
-      verificationUrl: data['verification_url'] as String?,
-    );
-  });
-
-  Future<ChatgptPollResult> pollChatgptLogin() => _guard(() async {
-    final r = await _dio.post(
-      '$_baseUrl${AppConstants.settingsChatgptLoginPoll}',
-    );
-    return ChatgptPollResult.fromJson(r.data as Map<String, dynamic>);
-  });
-
-  Future<void> clearChatgptLogin() => _guard(() async {
-    await _dio.delete('$_baseUrl${AppConstants.settingsChatgptLogin}');
-  });
-
   /// Records an evictable cache claim on [videoId] and (server-side) kicks off
   /// its HQ download, without it showing in the Downloads tab. Called when the
   /// user starts instant playback of a not-yet-downloaded video so the player
