@@ -53,6 +53,7 @@ platform :android do
   lane :listing do
     upload_to_play_store(
       package_name: PACKAGE_NAME,
+      track: "internal",
       json_key: ENV["PLAY_JSON_KEY_PATH"],
       skip_upload_aab: true,
       skip_upload_apk: true,
