@@ -3,7 +3,7 @@ default_platform(:android)
 PACKAGE_NAME = "codes.julian.nullfeed"
 
 platform :android do
-  desc "Get next version code from Play (max across all tracks + 1)"
+  desc "Get next version code from Play (max across all tracks and uploaded bundles + 1)"
   lane :next_build_number do
     codes = []
     %w[internal alpha beta production].each do |track|
@@ -16,6 +16,23 @@ platform :android do
       rescue => e
         UI.message("Track #{track}: #{e.message.to_s.lines.first&.strip} (skipping)")
       end
+    end
+    # Track releases can be replaced, orphaning already-uploaded bundles whose
+    # version codes stay burned. Count every uploaded bundle, not just tracks.
+    begin
+      require "supply"
+      require "supply/client"
+      Supply.config = FastlaneCore::Configuration.create(
+        Supply::Options.available_options,
+        { json_key: ENV["PLAY_JSON_KEY_PATH"], package_name: PACKAGE_NAME },
+      )
+      client = Supply::Client.make_from_config
+      client.begin_edit(package_name: PACKAGE_NAME)
+      codes += client.aab_version_codes
+      codes += client.apks_version_codes
+      client.abort_current_edit
+    rescue => e
+      UI.message("Bundle listing unavailable (#{e.message.to_s.lines.first&.strip}); using track codes only")
     end
     next_build = (codes.max || 0) + 1
 
