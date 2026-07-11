@@ -8,6 +8,7 @@ import '../models/video_page.dart';
 import '../models/feed.dart';
 import '../models/recommendation.dart';
 import '../models/youtube_import.dart';
+import '../models/ai_providers.dart';
 import 'storage_service.dart';
 
 final apiServiceProvider = Provider<ApiService>((ref) {
@@ -491,6 +492,73 @@ class ApiService {
 
   Future<void> clearYoutubeCookies() => _guard(() async {
     await _dio.delete('$_baseUrl${AppConstants.settingsYoutubeCookies}');
+  });
+
+  // --- AI providers (admin) -------------------------------------------------
+
+  Future<AiProvidersStatus> getAiProviders() => _guard(() async {
+    final r = await _dio.get('$_baseUrl${AppConstants.settingsAiProviders}');
+    return AiProvidersStatus.fromJson(r.data as Map<String, dynamic>);
+  });
+
+  Future<AiProvidersStatus> setAiKey(String provider, String key) =>
+      _guard(() async {
+        final r = await _dio.put(
+          '$_baseUrl${AppConstants.settingsAiKey(provider)}',
+          data: {'key': key},
+        );
+        return AiProvidersStatus.fromJson(r.data as Map<String, dynamic>);
+      });
+
+  Future<AiProvidersStatus> clearAiKey(String provider) => _guard(() async {
+    final r = await _dio.delete(
+      '$_baseUrl${AppConstants.settingsAiKey(provider)}',
+    );
+    return AiProvidersStatus.fromJson(r.data as Map<String, dynamic>);
+  });
+
+  /// Pin the [role] (`embed`/`rank`) provider (+ optional model), or pass an
+  /// empty provider to auto-detect.
+  Future<AiProvidersStatus> setAiSelection(
+    String role, {
+    required String provider,
+    String model = '',
+  }) => _guard(() async {
+    final r = await _dio.put(
+      '$_baseUrl${AppConstants.settingsAiSelection(role)}',
+      data: {'provider': provider, 'model': model},
+    );
+    return AiProvidersStatus.fromJson(r.data as Map<String, dynamic>);
+  });
+
+  // --- ChatGPT (Codex OAuth) sign-in (admin) --------------------------------
+
+  Future<ChatgptLoginStatus> getChatgptLogin() => _guard(() async {
+    final r = await _dio.get('$_baseUrl${AppConstants.settingsChatgptLogin}');
+    return ChatgptLoginStatus.fromJson(r.data as Map<String, dynamic>);
+  });
+
+  Future<ChatgptPollResult> startChatgptLogin() => _guard(() async {
+    final r = await _dio.post('$_baseUrl${AppConstants.settingsChatgptLogin}');
+    // The start response has the same shape as a pending poll.
+    final data = r.data as Map<String, dynamic>;
+    return ChatgptPollResult(
+      status: 'pending',
+      detail: null,
+      userCode: data['user_code'] as String?,
+      verificationUrl: data['verification_url'] as String?,
+    );
+  });
+
+  Future<ChatgptPollResult> pollChatgptLogin() => _guard(() async {
+    final r = await _dio.post(
+      '$_baseUrl${AppConstants.settingsChatgptLoginPoll}',
+    );
+    return ChatgptPollResult.fromJson(r.data as Map<String, dynamic>);
+  });
+
+  Future<void> clearChatgptLogin() => _guard(() async {
+    await _dio.delete('$_baseUrl${AppConstants.settingsChatgptLogin}');
   });
 
   /// Records an evictable cache claim on [videoId] and (server-side) kicks off

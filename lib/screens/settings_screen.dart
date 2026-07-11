@@ -13,6 +13,7 @@ import '../providers/settings_provider.dart';
 import '../services/api_service.dart';
 import '../utils/browser_link.dart';
 import '../widgets/adaptive_layout.dart';
+import '../widgets/ai_providers_section.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/profile_avatar.dart';
 
@@ -373,6 +374,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               'for every profile on this server.',
                         ),
                         const _YoutubeCookiesSection(),
+                        const SizedBox(height: 32),
+                        const _SectionHeader(
+                          icon: Icons.auto_awesome_rounded,
+                          title: 'AI providers',
+                          description:
+                              'Keys and provider choices for the Discover tab. '
+                              'Set here to override the server environment; '
+                              'clear to fall back to it.',
+                        ),
+                        const AiProvidersSection(),
                       ],
                       const SizedBox(height: 32),
                       const _SectionHeader(
