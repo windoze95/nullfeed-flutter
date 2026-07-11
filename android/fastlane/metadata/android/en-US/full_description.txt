@@ -1,0 +1,13 @@
+NullFeed is a personal media center app for your self-hosted video library. Browse your collection with a beautiful, cinematic interface. Enjoy features like resume-aware playback, multi-user profiles, and AI-powered content discovery.
+
+Features:
+• Stream your personal video library from your own server
+• Continue watching from where you left off on any device
+• Multi-user profiles with independent watch history
+• Channel-based organization for your content
+• AI-powered recommendations to discover new content
+• Dark theme optimized for OLED displays
+
+NullFeed connects to your self-hosted NullFeed server. Set up your server, point the app to it, and enjoy your personal media library from anywhere.
+
+No ads. No tracking. No promos. No monthly fee.
